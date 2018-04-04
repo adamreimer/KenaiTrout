@@ -1,0 +1,12 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+\opplan
+*.pdf
+*.doc
+*.inp
+*.out
+*.res
+*.vcv
+*.html

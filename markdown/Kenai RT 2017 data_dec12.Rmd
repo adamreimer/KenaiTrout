@@ -1,0 +1,69 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(magrittr)
+rawdat <- readr::read_csv("H:\\My Documents\\Kenai Trout\\Trout2017_MIDDLE RIVER_dec12.csv",
+                          col_names = c("date", "rm", "fl", "tag", "sex", "mat", "ad", "tloss", "recap", "hook", "parasite", "fate", "temp", "tl"),
+                          col_types = c("ciiciiiiiiiini")) #text", rep("numeric", 2), "text",  rep("numeric", 10)))
+
+dup_norecap <-
+  rawdat[rawdat$tag != 0, ] %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise(n = n(), recap = max(recap), fl_range = range(fl)[2] - range(fl)[1]) %>%
+  dplyr::filter(recap == 0 & n > 1)
+```
+
+There are still `r dim(dup_norecap)[1]` records where there are 2 entries for a tag number but neither is marked as a recap.  These were in the last batch I sent as well, so I’m not sure if you just missed them or think they are OK.  They all look like typos to me. Two of these actually add recaps to the dataset as the captures occur on different weeks.
+```{r}
+dup_norecap
+
+dup_rows <- lapply(lapply(dup_norecap$tag, function(x) which(rawdat$tag == x)), function(x) list(first = c((x[1]-4):(x[1]+4)), second = c((x[2]-4):(x[2]+4))))
+dup_dat <- lapply(dup_rows, function(x) list(first = rawdat[x$first, ], second = rawdat[x$second, ]))
+names(dup_dat) <- dup_norecap$tag
+```
+
+Here they are with the the 4 records before and after each copy of the duplicated tag numbers.
+```{r}
+dup_dat
+
+recap_nodup <-
+  rawdat[rawdat$tag != 0, ] %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise(n = n(), recap = max(recap)) %>%
+  dplyr::filter(recap == 1 & n == 1)
+
+#Break 2 records where tag lost but adclipped, retagged into 4 records, one for the recap and one for the new tagging event.
+tag_loss <- dplyr::bind_rows(rawdat[rawdat$tag %in% recap_nodup$tag, ] %>% dplyr::mutate(tag = NA),
+                             rawdat[rawdat$tag %in% recap_nodup$tag, ] %>% dplyr::mutate(tloss = 0, recap = 0))
+
+dat <- rawdat %>%
+        dplyr::filter(!(tag %in% recap_nodup$tag)) %>% #delete tag loss records
+        dplyr::bind_rows(tag_loss) %>% #add back in as tag loss and remarked fish
+        dplyr::mutate(date = as.Date(date, "%Y%m%d"),
+                      fl = ifelse(fl == 0, NA, fl),
+                      tag = as.numeric(ifelse(tag == "0", NA, tag)),
+                      sex = plyr::mapvalues(sex, from = c(0, 1, 2), to = c("U", "M", "F")),
+                      mat = as.logical(mat),
+                      ad = as.logical(ad),
+                      tloss = as.logical(tloss),
+                      recap = as.logical(recap),
+                      hook = as.logical(hook),
+                      parasite = as.logical(parasite),
+                      fate = plyr::mapvalues(fate, from = c(0, 1), to = c("rel", "mort"))
+                      )
+
+#examine recap data
+badmrdat <- is.na(dat$tag) | (dat$fate %in% "mort" & dat$recap == FALSE) # not usable in CH
+dat_mr <- dat[!badmrdat, ]
+recaps <- unique(dat_mr$tag[dat_mr$recap == TRUE])
+recap_dat <- lapply(recaps, function(x) dat_mr[dat_mr$tag == x, ])
+```
+
+Also one of the changes you made last time resulted in a tag being captured a total of 4 times compared to 3 in the last data set.
+```{r}
+recap_dat[sapply(recap_dat, dim)[1, ] == 4]
+
+```

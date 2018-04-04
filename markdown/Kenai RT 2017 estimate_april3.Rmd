@@ -1,0 +1,171 @@
+---
+title: "2017 Kenai River MR"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+library(magrittr)
+library(ggplot2)
+library(RMark)
+
+data <- readRDS("..\\data\\dat_17")
+#add fl, maturity and temperature at capture to CH
+CH <- readRDS("..\\data\\CH_17") %>%
+  dplyr::left_join(data[data$recap != TRUE, c("tag", "fl")], by = "tag") %>%
+  dplyr::mutate(fl = ifelse(is.na(fl), 401, fl),  #fill NA, fix in data?
+                fl_100 = cut(fl, breaks = seq(200, 800, 100)),
+                fl_g = cut(fl, breaks = c(0, 400, 900), labels = c("small", "large")),
+                recap = ifelse(nchar(gsub("0", "", ch)) >= 2, TRUE, FALSE)) %>%
+  dplyr::left_join(data[data$recap != TRUE, c("tag", "mat")], by = "tag") %>%
+  dplyr::left_join(data[data$recap != TRUE, c("tag", "rm")], by = "tag") %>%
+  dplyr::mutate(rm45 = ifelse(rm == 45, 1, 0),
+                rm46 = ifelse(rm == 46, 1, 0), 
+                rm47 = ifelse(rm == 47, 1, 0))
+
+#temperature by event data
+temp <- aggregate(data$temp, list(data$event), mean) %>% setNames(c("time", "temp"))
+
+level <- 
+  readr::read_tsv("..\\data\\flow2017.txt", 
+                  col_names = c("agency", "site", "date", "tz", "height", "A"), 
+                  col_types = "ccccnc", 
+                  skip = 29) %>%
+  dplyr::mutate(time = factor(format(as.Date(date), "%W"),labels = as.character(1:6))) %>%
+  dplyr::select(time, height) %>%
+  dplyr::group_by(time) %>%
+  dplyr::summarise(level = mean(height))
+mod_best <- readRDS("..\\scripts\\mod_best.rds")
+```
+
+I'll go light on the data summaries since you have looked at the same stuff independently.  The most relevant thing with respect to abundance estimation is documenting why we stratified the estimate by size class. Recapture rate differed by size class and the difference corresponded with our maturity data such that we might suspect behavioral differences between the size classes.
+
+```{r}
+#recapture rate by 100mm length group
+CH %>% 
+  dplyr::group_by(fl_100) %>%
+  dplyr::summarize(captures = n(),
+                   recaps = sum(recap == TRUE)) %>%
+  dplyr::mutate('recap/cap' = recaps / captures) %>%
+  knitr::kable(caption = "Recapture rate by 100 mm fork length group")
+
+CH$mat_f <- factor(CH$mat, levels = c(TRUE, FALSE), labels = c("Mature", "Immature"))
+ggplot(CH, aes(x = fl)) +
+  geom_histogram(bins = 25) +
+  facet_wrap(~ mat_f, ncol = 1, scales = "free_y") +
+  labs(title = "Fork Length vrs. Maturity")
+```
+
+Another task was identifying some factors that we think may affect some of the parameters we need to estimate to estimate abundance.  We are using the POPAN parametrization of the Jolly-Seber model so in addition to abundance we will be estimating apparent survival, probability of capture and probability of entrance. Probability of entrance is the proportion of the total population that entered the study area prior to each event.  I looked at several possible covariates but finally settled on water temperature as a continuous variable, water level as a continuous variable, and fork length as a categorical variable.
+
+```{r}
+dplyr::left_join(temp, level, by="time") %>%
+  tidyr::gather(stat, value, - time) %>%
+  ggplot(aes(x = as.numeric(time), y = value, color = stat)) +
+    geom_line() +
+    labs(title = "Average weekly Kenai River water level and temperature during MR study", x = "week", y = "Feet or degrees C") +
+    scale_x_continuous(breaks = 1:6)
+```
+
+For each model parameter I selected covariate combinations that seemed biologically plausible and were typically included in the top preforming models.  For apparent survival I included a constant model (~1, a single estimate for all groups and times), a fl model (~fl, separate survival estimates for each fork length group), a water level model (~level, survival is a function of water level) and a model where the function relating survival and water level differed for each fork length group (~fl \* level). For probability of capture I included a fl model (~fl, separate probability of capture estimates for each fork length group), and a model where the function relating probability of capture and water level differed for each fork length group (~fl \* level). Probability of entrance for each length group was related to water temperature (~fl * temp). All combinations of these covariate relationships were considered but only 5 were heavily weighted by AIC.
+
+```{r}
+knitr::kable(mod_best$model.table[, !grepl("model", colnames(mod_best$model.table))], digits = 2)
+```
+
+Since these 5 models are reasonably likely under the data and we don't have a strong theoretical preference model averaging seems appropriate. This approach allows us to included uncertainty from not knowing the true parameter relationships. Apparent survival varies widely between the models.  In general, small fish survival is less that large fish survival but lots of different relationships fit. Within the models we considered probability of capture helps explain some of the difference we see for apparent survival of small fish.  Specifically, two of our top 5 models assumed that probability of capture did not differed between length groups and those same models were the ones that had unique apparent survival probabilities. In short, the small number of small fish recaptures reflected both small fish abundance and either higher rates of emigration or lower probabilities of capturing small fish. In contrast entrance probability is similar across all 5 models
+
+```{r}
+ranks <- data.frame(rank = row(mod_best$model.table)[, 1], 
+                    mod_n = rownames(mod_best$model.table),
+                    mod_name = gsub("(.*)pent.*", "\\1", mod_best$model.table[, "model"]), 
+                    weight = mod_best$model.table$weight)
+
+ave_Phi <- 
+  model.average(mod_best, "Phi", drop = FALSE) %>%
+  dplyr::select(estimate, se, group, time) %>%
+  dplyr::mutate(model = "Model average",
+                lcl = estimate - 1.96 * se,
+                ucl = ifelse(estimate + 1.96 * se > 1, 1, estimate + 1.96 * se)) %>%
+  dplyr::mutate(model = factor(0, levels = 0:5, labels = c("Model average", as.character(ranks$mod_name)))) 
+
+ave_p <- 
+  model.average(mod_best, "p", vcv = TRUE, drop = FALSE)[[1]] %>%
+  dplyr::select(estimate, lcl, ucl , group, time) %>%
+  dplyr::mutate(model = "Model average")
+
+ave_pent <- 
+  model.average(mod_best, "pent", vcv = TRUE, drop = FALSE)[[1]] %>%
+  dplyr::select(estimate, lcl, ucl , group, time) %>%
+  dplyr::mutate(model = "Model average")
+
+est_N <- 
+  lapply(rownames(mod_best$model.table), function(x){
+    get.real(mod_best[[as.numeric(x)]], "N", se = TRUE) %>%
+      dplyr::mutate(model = gsub("(.*)pent.*", "\\1", mod_best$model.table[x, "model"])) %>%
+      dplyr::select(model, group, time, estimate, se)}) %>%
+  do.call(rbind, .)
+ave_N <- 
+data.frame(model = "Model average", 
+           small = unlist(model.average(list(estimate=est_N[est_N$group =="small", "estimate"], 
+                                     weight=mod_best$model.table$weight, 
+                                     se=est_N[est_N$group =="small", "se"]), mata = TRUE)),
+            large = unlist(model.average(list(estimate=est_N[est_N$group =="large", "estimate"], 
+                                      weight=mod_best$model.table$weight, 
+                                      se=est_N[est_N$group =="large", "se"]), mata = TRUE))) %>%
+  tibble::rownames_to_column() %>%
+  tidyr::gather(key = group, param, -rowname, -model) %>%
+  tidyr::spread(rowname, param) %>%
+  dplyr::bind_rows(replicate(nrow(mod_best$model.table) + 1, ., simplify = FALSE)) %>%
+  dplyr::mutate(mod_n = rep(0:6, each = 2))
+
+plot_params <- function(param, ave, label){
+  lapply(rownames(mod_best$model.table), function(x){
+    get.real(mod_best[[as.numeric(x)]], param, se = TRUE) %>%
+      dplyr::mutate(mod_n = x) %>%
+      dplyr::select(mod_n, group, time, estimate, se)}) %>%
+    do.call(rbind, .) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(rank = ranks$rank[ranks$mod_n == mod_n],
+                  model = factor(rank,
+                                 levels = 0:5,
+                                 labels = c("Model average", as.character(ranks$mod_name)))) %>%
+    ggplot(aes(x = as.numeric(time), y = estimate, color = model)) +
+    geom_line() +
+    geom_line(data = ave, size = 1.25) +
+    geom_ribbon(data = ave, aes(x = as.numeric(time), ymin = lcl, ymax = ucl), size = 1.25, alpha = 0.2, inherit.aes = FALSE) +
+    facet_grid(.~group) +
+    labs(title = paste0(label, " by length group"), x = "week", y = label, caption = "model average 95%CI shown with grey ribbon")
+}
+plot_params("Phi", ave_Phi, "Apparent Survival")
+plot_params("p", ave_p, "Probability of Capture")
+plot_params("pent", ave_pent, "Probability of entrance")
+```
+
+Looking at abundance we see that models that assume probability of capture does not differ between size class produce smaller estimates of small fish abundance while large fish abundance estimates do not change much between models.
+
+```{r}
+ave_N %>%
+  dplyr::mutate(ci95 = paste0(round(lcl, 0), "-", round(ucl, 0))) %>%
+  dplyr::filter(mod_n == 1)   %>%
+  dplyr::select(group, estimate, se, ci95) %>%
+  knitr::kable(digits = 0)
+
+lapply(rownames(mod_best$model.table), function(x){
+  get.real(mod_best[[as.numeric(x)]], "N", se = TRUE) %>%
+    dplyr::mutate(mod_n = x) %>%
+    dplyr::select(mod_n, group, time, estimate, se, lcl, ucl)}) %>%
+  do.call(rbind, .) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(rank = ranks$rank[ranks$mod_n == mod_n],
+                model = factor(rank,
+                               levels = 0:5,
+                               labels = c("Model average", as.character(ranks$mod_name)))) %>%
+  ggplot(aes(x = mod_n, y = estimate, ymin = lcl, ymax = ucl, color = model)) +
+    geom_crossbar(width = 0.5) +
+    geom_line(data = ave_N, aes(x = mod_n, y = estimate), size = 1.25, inherit.aes = FALSE) +
+    geom_ribbon(data = ave_N, aes(x = mod_n, ymin = lcl, ymax = ucl), size = 1.25, alpha = 0.2, inherit.aes = FALSE) +
+    facet_grid(.~group) +
+    labs(title = "Abundance", x = "model", y = "N", caption = "Point estimates and 95%CI (model average in black/grey)") +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
+```
