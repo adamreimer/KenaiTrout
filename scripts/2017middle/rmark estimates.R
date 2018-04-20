@@ -1,33 +1,21 @@
-library(ggplot2)
-library(magrittr)
+library(KenaiTrout)
 
-data <- readRDS(".\\data\\dat_17")
 #add fl, maturity and temperature at capture to CH
-CH <- readRDS(".\\data\\CH_17") %>%
-  dplyr::left_join(data[data$recap != TRUE, c("tag", "fl")], by = "tag") %>%
+CH <- CH_17 %>%
+  dplyr::left_join(dat_17[dat_17$recap != TRUE, c("tag", "fl")], by = "tag") %>%
   dplyr::mutate(fl = ifelse(is.na(fl), 401, fl),  #fill NA, fix in data?
                 fl_100 = cut(fl, breaks = seq(200, 800, 100)),
                 fl_g = cut(fl, breaks = c(0, 400, 900), labels = c("small", "large")),
                 recap = ifelse(nchar(gsub("0", "", ch)) >= 2, TRUE, FALSE)) %>%
-  dplyr::left_join(data[data$recap != TRUE, c("tag", "mat")], by = "tag") %>%
-  dplyr::left_join(data[data$recap != TRUE, c("tag", "rm")], by = "tag") %>%
+  dplyr::left_join(dat_17[dat_17$recap != TRUE, c("tag", "mat")], by = "tag") %>%
+  dplyr::left_join(dat_17[dat_17$recap != TRUE, c("tag", "rm")], by = "tag") %>%
   dplyr::mutate(rm45 = ifelse(rm == 45, 1, 0),
                 rm46 = ifelse(rm == 46, 1, 0), 
                 rm47 = ifelse(rm == 47, 1, 0))
 table(CH$fl_g, CH$recap)
 
 #temperature by event data
-temp <- aggregate(data$temp, list(data$event), mean) %>% setNames(c("time", "temp"))
-
-level <- 
-  readr::read_tsv(".\\data\\flow2017.txt", 
-                  col_names = c("agency", "site", "date", "tz", "height", "A"), 
-                  col_types = "ccccnc", 
-                  skip = 29) %>%
-  dplyr::mutate(time = factor(format(as.Date(date), "%W"),labels = as.character(1:6))) %>%
-  dplyr::select(time, height) %>%
-  dplyr::group_by(time) %>%
-  dplyr::summarise(level = mean(height))
+temp <- aggregate(dat_17$temp, list(dat_17$event), mean) %>% setNames(c("time", "temp"))
 
 library(RMark)
 #process dataset
@@ -40,9 +28,9 @@ ddl_fl = make.design.data(dat_fl)
 ddl_fl$Phi = merge_design.covariates(ddl_fl$Phi, temp)
 ddl_fl$p = merge_design.covariates(ddl_fl$p, temp)
 ddl_fl$pent = merge_design.covariates(ddl_fl$pent, temp)
-ddl_fl$Phi = merge_design.covariates(ddl_fl$Phi, level)
-ddl_fl$p = merge_design.covariates(ddl_fl$p, level)
-ddl_fl$pent = merge_design.covariates(ddl_fl$pent, level)
+ddl_fl$Phi = merge_design.covariates(ddl_fl$Phi, level_17)
+ddl_fl$p = merge_design.covariates(ddl_fl$p, level_17)
+ddl_fl$pent = merge_design.covariates(ddl_fl$pent, level_17)
 
 rt_models <- function(){
   Phi.dot <- list(formula=~1)
@@ -69,6 +57,8 @@ lapply(rownames(mod_results$model.table), function(x) knitr::kable(mod_results[[
 
 #drop models w AIC > ~2
 mod_best <- remove.mark(mod_results, as.numeric(rownames(mod_results$model.table)[6:8]))
+mod_best$model.table
+lapply(rownames(mod_best$model.table), function(x) knitr::kable(mod_best[[as.numeric(x)]]$results$real, digits = 3))
 #saveRDS(mod_best, file = ".\\scripts\\mod_best.rds")
 ranks <- data.frame(rank = row(mod_best$model.table)[, 1], 
                     mod_n = rownames(mod_best$model.table),
@@ -136,7 +126,7 @@ data.frame(model = "Model average",
 # #model.average.marklist does not give correct parameter average for N
 # #manual calculation
 # sum(est_Phi[est_Phi$group =="small" & est_Phi$time == "5", "estimate"] * mod_best$model.table$weight)
-
+library(ggplot2)
 plot_params <- function(param, ave, label){
   lapply(rownames(mod_best$model.table), function(x){
     get.real(mod_best[[as.numeric(x)]], param, se = TRUE) %>%

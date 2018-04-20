@@ -111,6 +111,7 @@ dat_recaps <-
 
 dat17 <- dplyr::bind_rows(dat_mr[!(dat_mr$tag %in% recaps), ], dat_recaps)
 #saveRDS(dat17, ".\\data\\dat_17")
+devtools::use_data(dat_17, pkg = ".\\KenaiTrout", overwrite = TRUE)
 
 CH <- dat17 %>%
   dplyr::mutate(cap = 1) %>%
@@ -120,6 +121,7 @@ CH <- dat17 %>%
   dplyr::mutate(ch = paste0(event1, event2, event3, event4, event5, event6)) %>%
   dplyr::select(-dplyr::starts_with("event"))
 #saveRDS(CH, ".\\data\\CH_17")
+devtools::use_data(CH_17, pkg = ".\\KenaiTrout", overwrite = TRUE)
 
 CH_ms <- dat17 %>%
   dplyr::mutate(cap = plyr::mapvalues(rm, from = c(45, 46, 47), to = c("A", "B", "C"))) %>%
