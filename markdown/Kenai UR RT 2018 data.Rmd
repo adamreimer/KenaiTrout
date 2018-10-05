@@ -1,0 +1,89 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(magrittr)
+rawdat <- 
+  readxl::read_excel("..\\KenaiTrout\\data-raw\\Copy of UPRRBT18_to Adam 9.10.19.xlsx",
+                     sheet = "UPRRBT18",
+                     col_names = c("date0", "boat", "crew", "fishnum", "loc", "tag", "recap", "lg", "ad", "fate", "comment1", "comment2", 
+                                   "week", "comment3"),
+                     skip = 1) %>%
+  dplyr::arrange(date0, boat, fishnum)
+```
+
+Here are some possible errors. Some of these are inconsequential but they will have to be corrected somewhere.
+  
+1) A mis-assigned week.
+```{r}
+table(rawdat$date0, rawdat$week)
+```
+
+2) There are quite a few comments that are hard to rectify. I’m highlighting cases where the comment implies the fish should be censored but it wasn’t. These 2 fish have a comment that says no tag but also a tag number.
+```{r}
+dat <- 
+  rawdat %>%
+  dplyr::filter(tag != 0, !(fate == 0 & recap == 0)) %>%
+  dplyr::mutate(date = as.Date(as.character(paste0("0", date0)), "%m%d%y"),
+                ad = as.logical(ad),
+                recap = as.logical(recap),
+                fate = plyr::mapvalues(fate, from = c(0, 1), to = c("censor", "rel")),
+                tl = ifelse(lg == 0, NA, lg),
+                week = ifelse(week == 2 & date0 == 70518, 1, week),
+                comment0 = paste0(ifelse(!is.na(comment1), paste0(comment1, ifelse(is.na(comment2) & is.na(comment3), "", ", ")), ""), 
+                                 ifelse(!is.na(comment2), paste0(comment2, ifelse(is.na(comment3), "", ", ")), ""),
+                                 ifelse(is.na(comment3), "", comment3)),
+                comment = ifelse(comment0 == "", NA, comment0)) %>%
+  dplyr::select(tag, date, week, loc, recap, ad, fate, tl, comment)
+
+  dat[dat$comment %in% "BLEEDING NO TAG", ] #have tag numbers
+```
+
+3) A few more weird comments
+```{r}
+dat[dat$tag == 7071, ]
+dat[grepl("LOST", dat$comment),]
+```
+
+5) Tag 3488 has a VOID comment but I don’t see any missing tags nearby.
+```{r}
+dat[dat$tag %in% 3446:3450 & dat$week == 2, ] #censor 3448?
+```
+
+5) Nine tag numbers are recorded more than once but are missing a recap flag for a latter capture. A few of the records have very different lengths.
+```{r}
+dup_norecap <-
+  dat %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise(n = n(), recap = sum(recap), fl_range = range(tl)[2] - range(tl)[1]) %>%
+  dplyr::filter(recap < (n - 1) & n > 1)
+dup_norecap
+```
+
+6) 16 records where the tag is called a recap but it's only in the database one time. A lot of those have a comment that implies the fish lost their tag and were retagged. Some have no informative comment. I assume those large tag numbers are from the earlier MR.  In that case they are not recaps.
+```{r}
+recap_nodup <-
+  dat %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise(n = n(), recap = max(recap)) %>%
+  dplyr::filter(recap == 1 & n == 1)
+recap_nodup
+```
+
+7) Amongst recaptured fish some of the length measurements are way off.
+```{r}
+recaps <- unique(dat$tag[dat$recap == TRUE])
+fill <-
+dat[dat$tag %in% recaps, ] %>%
+  dplyr::arrange(tag, date) %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise(tl_range = max(tl, na.rm = TRUE) - min(tl, na.rm = TRUE),
+                   tl = mean(tl, na.rm = TRUE))
+data.frame(tl_range = fill$tl_range) %>% dplyr::group_by(tl_range) %>% dplyr::summarise(num = n()) %>% print(n = 100)
+```
+Here tag numbers associated with length measurements that are more than 10mm different. 
+```{r}
+fill[fill$tl_range >= 10, ] %>% print(n = 100)
+```
