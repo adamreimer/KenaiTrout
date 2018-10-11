@@ -9,4 +9,5 @@
 *.out
 *.res
 *.vcv
+*.tmp
 *.html
