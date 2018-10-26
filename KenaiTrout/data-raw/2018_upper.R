@@ -154,8 +154,20 @@ dat_recaps <-
   dplyr::mutate(lg = ifelse(!is.na(lg.x) & abs(lg.y - lg.x) >= 12.5, NA, lg.y)) %>%
   dplyr::select(tag, week, loc, recap, lg)
 
+dat_UR18 <- dplyr::bind_rows(dat_mr[!(dat_mr$tag %in% recaps), ], dat_recaps)
+
+LH <-
+  dat_UR18 %>%
+  dplyr::select(week, tag, loc) %>%
+  dplyr::mutate(loc = cut(loc, breaks = c(0, 5.5, 10.5, 17), labels = FALSE)) %>%
+  tidyr::spread(week, loc, fill = 0, sep = "") %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise_all(sum) %>%
+  dplyr::mutate(lh = paste0(week1, week2, week3, week4, week5, week6)) %>%
+  dplyr::select(-dplyr::starts_with("week"))
+
 CH_UR18 <-
-  dplyr::bind_rows(dat_mr[!(dat_mr$tag %in% recaps), ], dat_recaps) %>%
+  dat_UR18 %>%
   dplyr::select(week, tag) %>%
   dplyr::mutate(cap = 1) %>%
   tidyr::spread(week, cap, fill = 0, sep = "") %>%
@@ -166,6 +178,7 @@ CH_UR18 <-
   dplyr::left_join(dat_UR18[, c("tag", "lg")] %>%
                      dplyr::group_by(tag) %>%
                      dplyr::summarise(lg = as.integer(mean(lg))), 
-                   by = "tag")
+                   by = "tag") %>%
+  dplyr::left_join(LH, by = "tag")
 
 devtools::use_data(CH_UR18, pkg = ".\\KenaiTrout", overwrite = TRUE)
