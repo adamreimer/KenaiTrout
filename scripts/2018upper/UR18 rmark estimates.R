@@ -166,6 +166,7 @@ tab1 <-
                 plarge = recap / at_large,
                 event = 1:6)
 
+tab1
 ggplot(tab1, aes(x = event, y = pcap)) +
   geom_point()  +
   ggplot2::geom_smooth(method=lm, se=TRUE)
