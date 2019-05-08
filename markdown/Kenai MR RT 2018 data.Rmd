@@ -1,0 +1,122 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(magrittr)
+dat_raw <- 
+  readxl::read_excel("..\\KenaiTrout\\data-raw\\Copy of All fish 2018 Mid River RBT.xlsx",
+                     sheet = "All fish 2018 Mid River RBT",
+                     col_names = c("date0", "boat", "crew", "method", "time0", "fishnum", "loc", "lat", "long", "lg", "recap", "tag", "ad", "sex0", 
+                                   "mat0", "fate0", "comment1_0", "comment2_0", "comment3_0"),
+                     col_types = c(rep("text", 5), "numeric", "text", rep("skip", 2), "numeric", "logical", "numeric", "logical", "numeric", 
+                                   "text", "numeric", rep("text", 3)),
+                     skip = 1) %>%
+  dplyr::mutate(date = as.Date(as.character(paste0("0", date0)), "%m%d%Y"), 
+                week = as.character(as.character(date, format = "%W")),
+                nchar0 = nchar(time0),
+                time00 = ifelse(nchar0 == 5, paste0(0, time0), time0),
+                #dt = as.POSIXct(as.POSIXlt(time00, format = "%H%M%S"), tz = "America/Anchorage"),
+                dt = as.POSIXct(paste0(0, date0, ":", time00), format = "%m%d%Y:%H%M%S", tz = "America/Anchorage"),
+                fate = plyr::mapvalues(fate0, from = c(0, 1), to = c("censor", "rel")),
+                sex = plyr::mapvalues(sex0, from = c(0, 1, 2), to = c("U", "M", "F")),
+                mat = plyr::mapvalues(mat0, from = c(0, 1, 2, 3), to = c(NA, "pre-spawn", "spawning", "post-spawn")),
+                comment0 = paste0(ifelse(!is.na(comment1_0), paste0(comment1_0, ifelse(is.na(comment2_0) & is.na(comment3_0), "", ", ")), ""), 
+                                 ifelse(!is.na(comment2_0), paste0(comment2_0, ifelse(is.na(comment3_0), "", ", ")), ""),
+                                 ifelse(is.na(comment3_0), "", comment3_0)),
+                comment = ifelse(comment0 == "", NA, comment0)) %>%
+  dplyr::select(-dplyr::ends_with("0")) %>%
+  dplyr::arrange(date, boat, fishnum)
+```
+## 2018 Middle River Rainbow Trout data error check
+  
+Here are some possible errors. Included most errors in case they affect later inconsistencies. We will likely have to go through this a few times, for example there are no length comparisons at this point and I think we found a few bad tag numbers by looking at large length discrepancies last year. For the time being I stopped after merging the 2017 and 2018 middle river data sets because there are a large number of tags marked as recaps that don't have an initial capture in either data set.
+  
+1) There are 34 identical rows in the data set. Here is one copy of each duplicated row.  
+```{r}
+dup_id <- duplicated(dat_raw) 
+sum(dup_id) #36 duplicate rows!
+dup <- dat_raw[dup_id, ]
+dat_raw <- dat_raw[!dup_id, ] # 2495 before, 2459 after
+print(dup[, c("date", "boat", "fishnum", "tag", "loc", "lg", "recap", "ad", "fate", "sex", "mat")], n = 50)
+```
+
+2) Quite a few times do not make sense. This is a small point but the times are used to pick the first capture when a fish is captured several times within the same event.  
+```{r}
+hist(as.numeric(format(dat_raw$dt, format = "%H")), main = "hour of catch")
+```
+
+3) Two lengths are obviously wrong. Can we fix those? If so there are some others that are lg = 0.  
+```{r}
+#table(dat_raw$lg[dat_raw$lg <= 150], useNA = "ifany")
+dat_raw[dat_raw$lg <= 150 & dat_raw$lg > 0, c("date", "boat", "fishnum", "tag", "loc", "lg", "recap", "ad", "fate", "sex", "mat")]
+```
+
+5) One row has an NA for recap.  
+```{r}
+  dat_raw[dat_raw$tag == 1113, c("date", "boat", "fishnum", "tag", "loc", "lg", "recap", "ad", "fate", "sex", "mat")]
+```
+
+5) Twenty one records with 0 for tag number. Most of these look like morts but one fish is not censored and does not have an ominous comment (row # 14).  
+```{r}
+  dat_raw[dat_raw$tag == 0, c("date", "boat", "fishnum", "tag", "loc", "lg", "recap", "ad", "fate", "comment")] %>% print(n = 100)
+  dat_raw <- dat_raw[dat_raw$tag != 0, ] #2459 records before, 2438 after
+```
+
+6) Tag 36 has a void note (first record) but looks to be deployed while the last record below says void but I don't see a missing tag number (I thought it referred to tag 1451 but it looks to be deployed a few day later.
+```{r}
+dat_raw[grepl("VOID", dat_raw$comment), c("date", "boat", "fishnum", "tag", "loc", "lg", "recap", "ad", "fate", "comment")]
+```
+
+7) I assume 9999, 99999, and 999999 are codes for "no tag" but note that 2 of those are marked as recaps but are not marked as ad clips.
+```{r}
+dat_raw[dat_raw$tag %in% c("9999", "99999", "999999"), c("date", "boat", "fishnum", "tag", "loc", "lg", "recap", "ad", "fate", "comment")] # looks like 9999, 99999, and 999999 are dummy tag numbers, delete (7) note 2 are marked recap
+dat_raw <- dat_raw[!(dat_raw$tag %in% c("9999", "99999", "999999")), ] #2431 remain
+    #dat_raw[dat_raw$tag != 0 & dat_raw$fate == "censor", ] %>% print(n = 100) # save the recaps, delete the rest (12)
+      dat_raw <- dat_raw[!(dat_raw$fate == "censor" & dat_raw$recap == 0), ] #2419 remain
+      
+#Look for fish captured twice in the same week
+same_event <-
+  dat_raw %>%
+  dplyr::group_by(tag, week) %>%
+  dplyr::summarise(recap = max(recap), num = n()) %>%
+  dplyr::filter(recap == 1 & num > 1)
+
+del_same_event <- 
+  dat_raw[dat_raw$tag %in% same_event$tag, ] %>% 
+  dplyr::group_by(tag, week) %>%
+  dplyr::arrange(tag, week, dt) %>%
+  dplyr::filter(dplyr::row_number() != 1) %>%
+  dplyr::select(tag, week, dt, boat)
+dat_raw <- dplyr::anti_join(dat_raw, del_same_event, by = c("tag", "week", "dt", "boat")) #2419 before, 2377 remain
+```
+
+8) 16 tags are in the data twice but neither record is marked as a recap.
+```{r}
+#Find and correct tags recorded more than once but without a recap flag
+dup_norecap <-
+  dat_raw %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise(n = n(), recap = sum(recap), lg_range = range(lg)[2] - range(lg)[1]) %>%
+  dplyr::filter(recap < (n - 1) & n > 1)
+dup_norecap
+```
+
+9) There are 177 tag numbers that are marked as a recap but not in the data set twice. You would hope that all of those are 2017 tags. When I check there are 121 I do find in the 2017 data set but 56 that I don't find in the 2017 data set. Here are those tag numbers.
+```{r}
+#find and correct tags recorded once but marked as a recap
+recap_nodup <-
+  dat_raw %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise(n = n(), recap = max(recap)) %>%
+  dplyr::filter(recap == 1 & n == 1)
+#recap_nodup #177 tags marked recap without finding a duplicate
+in17dat <- intersect(recap_nodup$tag, KenaiTrout::CH_17$tag)
+notin17dat <- setdiff(recap_nodup$tag, KenaiTrout::CH_17$tag)
+notin17dat
+```
+
+```{r}
+
+```
