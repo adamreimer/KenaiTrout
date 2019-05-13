@@ -1,11 +1,13 @@
 library(KenaiTrout)
 library(RMark)
 library(ggplot2)
+loc = tidyr::separate(CH_UR18["lh"], lh, into = paste0("l", 1:6), sep = 1:5) %>% apply(1, function(x) min(as.numeric(x[x != 0])))
 CH <- 
   CH_UR18 %>%
   dplyr::mutate(lg_g = cut(lg, breaks = c(0, 400, 900), labels = c("small", "large")),
-                recap = ifelse(nchar(gsub("0", "", ch)) >= 2, TRUE, FALSE))
-table(CH$lg_g, CH$recap)
+                recap = ifelse(nchar(gsub("0", "", ch)) >= 2, TRUE, FALSE),
+                loc2 = as.numeric(loc == 2),
+                loc3 = as.numeric(loc == 3))
 
 # #Test closure assumption
 # #process dataset
@@ -42,76 +44,89 @@ table(CH$lg_g, CH$recap)
 # #Closed population is a safe assumption, top three models are all fixed with Phi = 1 and pent = 0 or Phi is estimated very close to 1. 
 #saveRDS(POPAN_mod_results, file = ".\\scripts\\2018upper\\POPAN_mod_results.rds")
 # 
-# #real estimates (models ordered by AIC)
-# lapply(rownames(POPAN_mod_results$model.table), function(x) knitr::kable(POPAN_mod_results[[as.numeric(x)]]$results$real, digits = 3))
+#real estimates (models ordered by AIC)
+# lapply(rownames(POPAN_mod_results$model.table), function(x) knitr::kable(POPAN_mod_results[[as.numeric(x)]]$results$real, digits = 3))[1:11]
 # 
 # #drop models w AIC > ~2
 # POPAN_drop_mod <- rownames(POPAN_mod_results$model.table)[POPAN_mod_results$model.table$DeltaAICc > 2]
-# POPAN_mod_best <- remove.mark(mod_results, as.numeric(drop_mod))
+# POPAN_mod_best <- remove.mark(POPAN_mod_results, as.numeric(POPAN_drop_mod))
 # POPAN_mod_best$model.table
 # lapply(rownames(POPAN_mod_best$model.table), function(x) knitr::kable(POPAN_mod_best[[as.numeric(x)]]$results$real, digits = 3))
 
 #Closed models
 #process dataset
 # fill lg = NA
-CH_UR18$lg[is.na(CH_UR18$lg)] <- mean(CH_UR18$lg, na.rm = TRUE)
-closed_dat <- process.data(CH_UR18[, 2:3], model = "Huggins")
+CH$lg[is.na(CH$lg)] <- mean(CH$lg, na.rm = TRUE)
+closed_dat <- process.data(CH[, c(2, 3, 7, 8)], model = "Huggins")
 closed_ddl <- make.design.data(closed_dat)
 
 closed_models <- function(){
-  closed_ddl$p$time_g <- c(0, 0, 0, 0, 1, 1)
-  closed_ddl$c$time_g <- c(0, 0, 0, 1, 1)
-  
   # Define parameter models
-  p.dotshared <- list(formula=~1, share=TRUE) #M0 
-  p.timeshared <- list(formula=~time, share=TRUE) #Mt
-  p.dot <- list(formula=~1 + c, share=TRUE) #Mb
   
-  p.covtimeshare <- list(formula=~lg * time, share=TRUE)
-  p.covtimeb <- list(formula=~lg * c + time, share=TRUE)
-  p.covtimeb2 <- list(formula=~lg + c + time, share=TRUE)
-  p.covtimeshare_g <- list(formula=~time + lg + lg:time_g, share=TRUE)
-#  p.covb <- list(formula=~lg * c, share=TRUE)
-#  p.covshare <- list(formula=~lg, share=TRUE)  
+  # #Basic Models -Mt best model by 41DeltaAIC
+  # p.M0 <- list(formula=~1, share=TRUE)
+  # p.Mt <- list(formula=~time, share=TRUE)
+  # p.Mb <- list(formula=~1 + c, share=TRUE)
+  # p.Mh.lg <- list(formula=~lg, share=TRUE)
+  # p.Mh.loc <- list(formula=~loc2 + loc3, share=TRUE)
+  # 
+  # mod_list <- create.model.list("Huggins")
+  # mod_results <- mark.wrapper(mod_list, data = closed_dat, ddl = closed_ddl)
+  # 
+  # #Mh.mix
+  # p.Mh.mix <- list(formula=~mixture)
+  # huggins.Mh.mix <- mark(data = CH_UR18[2], model="HugHet", model.parameters = list(p = p.Mh.mix))
+  # 
+  # merge.mark(mod_results, huggins.Mh.mix)
+  
+  #Combined Models -Mth.lgloc best model by 13DeltaAIC (Mtbh.lgloc closed but c insignificant) 
+  p.Mtb <- list(formula=~time + c, share=TRUE)
+  p.Mth.lg <- list(formula=~time*lg, share=TRUE)
+  p.Mth.loc <- list(formula=~time + loc2 + loc3, share=TRUE)
+  p.Mtbh.loc <- list(formula=~time + c + loc2 + loc3, share=TRUE)
+  p.Mtbh.lg <- list(formula=~time*lg + c, share=TRUE)
+  p.Mth.lgloc <- list(formula=~time*lg + loc2 + loc3, share=TRUE)
+  p.Mtbh.lgloc <- list(formula=~time*lg + c + loc2 + loc3, share=TRUE)
 
   mod_list <- create.model.list("Huggins")
   mod_results <- mark.wrapper(mod_list, data = closed_dat, ddl = closed_ddl)
-  
-  ptimemixtureshared <- list(formula=~lg * time + mixture, share=TRUE)
-  pmixture <- list(formula=~mixture) #Mh
-  #    Huggins heterogeneity models
-  #  Mh2 - p different for mixture
-  huggins.Mh2 <- mark(data = CH_UR18[2], model="HugHet", model.parameters = list(p = pmixture))
-  #  Huggins Mth2 - p different for time; mixture additive
-  closed_dat2 <- process.data(CH_UR18[, 2:3], model = "HugFullHet")
-  huggins.Mth2.additive <- mark(data = closed_dat2, model.parameters = list(p = ptimemixtureshared), adjust=TRUE)
-  
-  merge.mark(mod_results, huggins.Mh2, huggins.Mth2.additive)
 }
 # fit models in mark by calling function created above
 closed_results <- closed_models()
 closed_results$model.table
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$beta, digits = 3))
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$real, digits = 3))
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$derived, digits = 3))
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$beta, digits = 3))[1:3]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$real, digits = 3))[1:3]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$derived, digits = 3))[1:3]
 
-
+#using groups is equivilent to best model
+# closed_dat_group <- process.data(data.frame(CH[, c(2, 3)], loc = as.factor(loc)), group = "loc", model = "Huggins")
+#   closed_ddl_group <- make.design.data(closed_dat_group)
+#   mod_results_group <- mark(model.parameters = list(p = list(formula=~time*lg + loc, share=TRUE)), data = closed_dat_group , ddl = closed_ddl_group)
+  
 #display index value for p coefficients
 closed_ddl
-plot_dat <- expand.grid(lg = seq(200,600,25), index = 1:6)
+plot_dat <- 
+  rbind(
+    expand.grid(lg = seq(200,600,25), loc2 = 0, loc3 = 0, index = 1:6),
+    expand.grid(lg = seq(200,600,25), loc2 = 1, loc3 = 0, index = 1:6),
+    expand.grid(lg = seq(200,600,25), loc2 = 0, loc3 = 1, index = 1:6)
+  )
 event_labs <- c("July 2-5", "July 9-11", "July 16-18", "July 23-25", "July 30-Aug. 1", "Aug 6-8")
+loc_labs <- c("River mile 72-73.2", "River mile 70.8-72", "River mile 69.6-70.8")
 
-covariate.predictions(closed_results[[3]], data = plot_dat, indices = c(1, 6))$estimates %>%
-  dplyr::mutate(event = factor(index, labels = event_labs)) %>%
+
+covariate.predictions(closed_results[[6]], data = plot_dat, indices = c(1, 6))$estimates %>%
+  dplyr::mutate(event = factor(index, labels = event_labs),
+                loc = factor(ifelse(loc2 == 1, "2", ifelse(loc3 == 1, "3", "1")), labels = loc_labs)) %>%
   ggplot(aes(x = lg, ymin = lcl, ymax = ucl)) +
-    geom_ribbon(alpha = 0.25) +
+    geom_ribbon(alpha = 0.25, linetype = 0) +
     geom_line(aes(y = estimate)) +
-    facet_grid(~event) +
+    facet_grid(event~loc) +
     labs(y = "Probability of Capture", x = "Total Length")
 
-knitr::kable(closed_results[[3]]$results$beta, digits = 3)
-knitr::kable(closed_results[[3]]$results$real, digits = 3)
-knitr::kable(closed_results[[3]]$results$derived, digits = 3)
+knitr::kable(closed_results[[6]]$results$beta, digits = 3)
+knitr::kable(closed_results[[6]]$results$real, digits = 3)
+knitr::kable(closed_results[[6]]$results$derived, digits = 3)
 
 read.delim(".\\KenaiTrout\\data-raw\\URlevel_18.txt", 
            header = FALSE, 
@@ -204,6 +219,17 @@ tab4 <-
 tab4
 chisq.test(tab4[, c("cap", "recap")])
 
+tab4e <- 
+  dplyr::mutate(temp, event = gsub(".(\\d)", "\\1", event)) %>%
+  dplyr::group_by(class, event, loc) %>%
+  dplyr::summarise(n = n()) %>%
+  tidyr::spread(class, n) %>%
+  dplyr::mutate(p1 = recap / (cap + recap),
+                p2 = recap / sum(recap),
+                p3 = cap / sum(cap))
+tab4e
+lapply(list(4:6, 7:9, 10:12, 13:15, 16:18), function(x) chisq.test(tab4e[x, c("cap", "recap")]))
+
 temp2 <-
   temp %>%
   dplyr::mutate(class2 = ifelse(class == "cap", class, event)) %>%
@@ -223,6 +249,7 @@ tab5 <-
 tab5
 sum(c(13, 23, 8)) / sum(c(131, 86, 48))
 
+CH_UR18$lg[is.na(CH_UR18$lg)] <- mean(CH_UR18$lg, na.rm = TRUE)
 lg <- 
   CH_UR18 %>% 
   tidyr::separate(ch, into = paste0("e", 1:6), sep = 1:5) %>%
@@ -231,23 +258,36 @@ lg <-
   dplyr::select(-lg) %>%
   tidyr::gather(event, lg) %>%
   dplyr::filter(lg != 0)
-
 ggplot(lg, aes(x = lg, color = event)) +
   stat_ecdf()
-
 kSamples::ad.test(lapply(paste0("e", 1:6), function(x){lg$lg[lg$event == x]}))
 
+loc <- 
+  CH_UR18 %>% 
+  tidyr::separate(lh, into = paste0("e", 1:6), sep = 1:5) %>%
+  dplyr::select(dplyr::starts_with("e"), lg) %>%
+  dplyr::select(-lg) %>%
+  tidyr::gather(event, loc) %>%
+  dplyr::filter(loc != 0) %>%
+  dplyr::select(-event)
+loc_plot1 <- 
+  ggplot(cbind(lg, loc), aes(x = lg, color = loc)) +
+  stat_ecdf()
+loc_plot1
+loc_plot1 + facet_grid(event~.)
+
 #Weighted length comp
-alpha <- closed_results[[3]]$results$beta$estimate[grepl("p:\\(|p:t", rownames(closed_results[[3]]$results$beta))]
-beta <- closed_results[[3]]$results$beta$estimate[grepl("p:lg", rownames(closed_results[[3]]$results$beta))] 
+alpha <- closed_results[[6]]$results$beta$estimate[grepl("p:\\(|p:time\\d$", rownames(closed_results[[6]]$results$beta))]
+beta <- closed_results[[6]]$results$beta$estimate[grepl("p:lg|p:time\\d:lg", rownames(closed_results[[6]]$results$beta))] 
+gamma <- closed_results[[6]]$results$beta$estimate[grepl("loc", rownames(closed_results[[6]]$results$beta))]
 
 num <- 
-  CH_UR18 %>% 
+  CH %>% 
   dplyr::mutate(event = regexpr("1", ch),
                 c_ik = ifelse(event == 1,
                               exp(alpha[1] + beta[1] * lg)/(1 + exp(alpha[1] + beta[1] * lg)),
-                              exp(alpha[1] + alpha[event] + beta[1] * lg + beta[event] * lg) /
-                                 (1+ exp(alpha[1] + alpha[event] + beta[1] * lg + beta[event] * lg))),
+                              exp(alpha[1] + alpha[event] + beta[1] * lg + beta[event] * lg + gamma[1] * loc2 + gamma[2] * loc3) /
+                                 (1+ exp(alpha[1] + alpha[event] + beta[1] * lg + beta[event] * lg + gamma[1] * loc2 + gamma[2] * loc3))),
                 lg_bin = cut(lg, breaks = seq(200, 600, 50), right = FALSE)) %>%
   dplyr::group_by(event, lg_bin) %>%
   dplyr::summarize(num_p = sum(1 / c_ik),
@@ -269,8 +309,8 @@ dplyr::left_join(num, dem, by = "event") %>%
                    se_pj_raw = sqrt(pj_raw * (1 - pj_raw) / (n - 1)),
                    p_j = sum(w_i * p_ij),
                    se_pj = se_pj_raw,
-                   N_j = p_j * closed_results[[3]]$results$derived$'N Population Size'$estimate,
-                   se_N_j = sqrt(closed_results[[3]]$results$derived$'N Population Size'$estimate^2 * se_pj^2 +
-                                   p_j^2 * closed_results[[3]]$results$derived$'N Population Size'$se^2 -
-                                   se_pj^2 * closed_results[[3]]$results$derived$'N Population Size'$se^2))
+                   N_j = p_j * closed_results[[6]]$results$derived$'N Population Size'$estimate,
+                   se_N_j = sqrt(closed_results[[6]]$results$derived$'N Population Size'$estimate^2 * se_pj^2 +
+                                   p_j^2 * closed_results[[6]]$results$derived$'N Population Size'$se^2 -
+                                   se_pj^2 * closed_results[[6]]$results$derived$'N Population Size'$se^2))
 
