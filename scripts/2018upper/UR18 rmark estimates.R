@@ -79,9 +79,10 @@ closed_models <- function(){
   # 
   # merge.mark(mod_results, huggins.Mh.mix)
   
-  #Combined Models -Mt best model by 41DeltaAIC
+  #Combined Models -Mth.lgloc best model by 13DeltaAIC (Mtbh.lgloc closed but c insignificant) 
   p.Mtb <- list(formula=~time + c, share=TRUE)
   p.Mth.lg <- list(formula=~time*lg, share=TRUE)
+  p.Mth.loc <- list(formula=~time + loc2 + loc3, share=TRUE)
   p.Mtbh.loc <- list(formula=~time + c + loc2 + loc3, share=TRUE)
   p.Mtbh.lg <- list(formula=~time*lg + c, share=TRUE)
   p.Mth.lgloc <- list(formula=~time*lg + loc2 + loc3, share=TRUE)
@@ -111,16 +112,16 @@ plot_dat <-
     expand.grid(lg = seq(200,600,25), loc2 = 0, loc3 = 1, index = 1:6)
   )
 event_labs <- c("July 2-5", "July 9-11", "July 16-18", "July 23-25", "July 30-Aug. 1", "Aug 6-8")
+loc_labs <- c("River mile 72-73.2", "River mile 70.8-72", "River mile 69.6-70.8")
+
 
 covariate.predictions(closed_results[[6]], data = plot_dat, indices = c(1, 6))$estimates %>%
   dplyr::mutate(event = factor(index, labels = event_labs),
-                loc = ifelse(loc2 == 1, "2", ifelse(loc3 == 1, "3", "1")),
-                lcl = ifelse(loc != 2, 0, lcl),
-                ucl = ifelse(loc != 2, 0, ucl)) %>%
-  ggplot(aes(x = lg, ymin = lcl, ymax = ucl, color = loc)) +
+                loc = factor(ifelse(loc2 == 1, "2", ifelse(loc3 == 1, "3", "1")), labels = loc_labs)) %>%
+  ggplot(aes(x = lg, ymin = lcl, ymax = ucl)) +
     geom_ribbon(alpha = 0.25, linetype = 0) +
     geom_line(aes(y = estimate)) +
-    facet_grid(~event) +
+    facet_grid(event~loc) +
     labs(y = "Probability of Capture", x = "Total Length")
 
 knitr::kable(closed_results[[6]]$results$beta, digits = 3)
@@ -247,7 +248,6 @@ tab5 <-
                 p = out / total)
 tab5
 sum(c(13, 23, 8)) / sum(c(131, 86, 48))
-chisq.test(tab5[, c("V1", "V2", "V3")])
 
 CH_UR18$lg[is.na(CH_UR18$lg)] <- mean(CH_UR18$lg, na.rm = TRUE)
 lg <- 
