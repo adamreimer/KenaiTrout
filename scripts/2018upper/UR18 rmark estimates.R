@@ -2,62 +2,58 @@ library(KenaiTrout)
 library(RMark)
 library(ggplot2)
 loc = tidyr::separate(CH_UR18["lh"], lh, into = paste0("l", 1:6), sep = 1:5) %>% apply(1, function(x) min(as.numeric(x[x != 0])))
+CH_UR18$lg[is.na(CH_UR18$lg)] <- mean(CH_UR18$lg, na.rm = TRUE)
+lg_g = cut(CH_UR18$lg, breaks = c(0, 299, 499, 900), labels = c("small", "medium", "large"))
 CH <- 
   CH_UR18 %>%
-  dplyr::mutate(lg_g = cut(lg, breaks = c(0, 400, 900), labels = c("small", "large")),
+  dplyr::mutate(lg_g = lg_g,
                 recap = ifelse(nchar(gsub("0", "", ch)) >= 2, TRUE, FALSE),
                 loc2 = as.numeric(loc == 2),
-                loc3 = as.numeric(loc == 3))
+                loc3 = as.numeric(loc == 3),
+                lg2 = as.numeric(lg_g == 2),
+                lg3 = as.numeric(lg_g == 3))
 
-# #Test closure assumption
-# #process dataset
-# dat_fl <- process.data(data.frame(ch = CH_UR18$ch, fl = CH_UR18$lg_g, stringsAsFactors = FALSE),
-#                        model = "POPAN", 
-#                        groups = "fl")
-# 
-# #create design data
-# ddl_fl = make.design.data(dat_fl)
-# 
-# rt_models <- function(){
-#   Phi.dot <- list(formula=~1, fixed = list(index = 1:10, value = 1))
-#   Phi.fl <- list(formula=~fl)
-#   Phi.t <- list(formula=~time)
-#   Phi.flt <- list(formula=~fl*time)
-# 
-#   p.dot <- list(formula=~1)
-#   p.fl <- list(formula=~fl)
-#   p.t <- list(formula=~time)
-#   p.flt <- list(formula=~fl*time)
-#   
-#   pent.dot <- list(formula=~1, fixed = list(index = 1:10, value = 0))
-#   pent.t <- list(formula=~time)
-#   pent.flt <- list(formula=~fl*time)
-#   
-#   N.fl <- list(formula=~fl)
-#   
-#   mod_list <- create.model.list("POPAN")
-#   mod_results <- mark.wrapper(mod_list, data = dat_fl, ddl = ddl_fl)
-#   mod_results
-# }
-# POPAN_mod_results <- rt_models()
-# POPAN_mod_results$model.table
-# #Closed population is a safe assumption, top three models are all fixed with Phi = 1 and pent = 0 or Phi is estimated very close to 1. 
+#Test closure assumption
+#process dataset
+dat_fl <- process.data(data.frame(ch = CH$ch, fl = CH$lg_g, stringsAsFactors = FALSE),
+                       model = "POPAN",
+                       groups = "fl")
+
+#create design data
+ddl_fl = make.design.data(dat_fl)
+
+rt_models <- function(){
+  Phi.one <- list(formula=~1, fixed = list(index = 1:15, value = 1))
+  Phi.dot <- list(formula=~1)
+
+  p.flt <- list(formula=~fl*time)
+
+  pent.end <- list(formula=~1, fixed = list(index = c(1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14), value = c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)))
+  pent.one <- list(formula=~1, fixed = list(index = 1:15, value = 0))
+  pent.dot <- list(formula=~1)
+  pent.t <- list(formula=~time)
+
+  N.fl <- list(formula=~fl)
+
+  mod_list <- create.model.list("POPAN")
+  mod_results <- mark.wrapper(mod_list, data = dat_fl, ddl = ddl_fl)
+  mod_results
+}
+POPAN_mod_results <- rt_models()
+POPAN_mod_results$model.table
 #saveRDS(POPAN_mod_results, file = ".\\scripts\\2018upper\\POPAN_mod_results.rds")
-# 
-#real estimates (models ordered by AIC)
-# lapply(rownames(POPAN_mod_results$model.table), function(x) knitr::kable(POPAN_mod_results[[as.numeric(x)]]$results$real, digits = 3))[1:11]
-# 
-# #drop models w AIC > ~2
-# POPAN_drop_mod <- rownames(POPAN_mod_results$model.table)[POPAN_mod_results$model.table$DeltaAICc > 2]
-# POPAN_mod_best <- remove.mark(POPAN_mod_results, as.numeric(POPAN_drop_mod))
-# POPAN_mod_best$model.table
-# lapply(rownames(POPAN_mod_best$model.table), function(x) knitr::kable(POPAN_mod_best[[as.numeric(x)]]$results$real, digits = 3))
+
+#drop models w AIC > ~3
+#Closed population is a safe assumption, top three models are all fixed with Phi = 1 and pent = 0 or Phi is estimated very close to 1.
+POPAN_drop_mod <- rownames(POPAN_mod_results$model.table)[POPAN_mod_results$model.table$DeltaAICc > 3.5]
+POPAN_mod_best <- remove.mark(POPAN_mod_results, as.numeric(POPAN_drop_mod))
+POPAN_mod_best$model.table
+lapply(rownames(POPAN_mod_best$model.table), function(x) knitr::kable(POPAN_mod_best[[as.numeric(x)]]$results$real, digits = 3))
 
 #Closed models
 #process dataset
 # fill lg = NA
-CH$lg[is.na(CH$lg)] <- mean(CH$lg, na.rm = TRUE)
-closed_dat <- process.data(CH[, c(2, 3, 7, 8)], model = "Huggins")
+closed_dat <- process.data(CH[, c(2, 3, 7, 8, 9, 10)], model = "Huggins")
 closed_ddl <- make.design.data(closed_dat)
 
 closed_models <- function(){
@@ -68,6 +64,7 @@ closed_models <- function(){
   # p.Mt <- list(formula=~time, share=TRUE)
   # p.Mb <- list(formula=~1 + c, share=TRUE)
   # p.Mh.lg <- list(formula=~lg, share=TRUE)
+  # p.Mh.lgg <- list(formula=~lg2 + lg3, share=TRUE)
   # p.Mh.loc <- list(formula=~loc2 + loc3, share=TRUE)
   # 
   # mod_list <- create.model.list("Huggins")
@@ -79,7 +76,7 @@ closed_models <- function(){
   # 
   # merge.mark(mod_results, huggins.Mh.mix)
   
-  #Combined Models -Mth.lgloc best model by 13DeltaAIC (Mtbh.lgloc closed but c insignificant) 
+  #Combined Models -Mth.lgloc best model by 13DeltaAIC (Mtbh.lgloc close but c insignificant)
   p.Mtb <- list(formula=~time + c, share=TRUE)
   p.Mth.lg <- list(formula=~time*lg, share=TRUE)
   p.Mth.loc <- list(formula=~time + loc2 + loc3, share=TRUE)
@@ -94,9 +91,9 @@ closed_models <- function(){
 # fit models in mark by calling function created above
 closed_results <- closed_models()
 closed_results$model.table
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$beta, digits = 3))[1:3]
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$real, digits = 3))[1:3]
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$derived, digits = 3))[1:3]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$beta, digits = 3))[1:2]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$real, digits = 3))[1:2]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$derived, digits = 3))[1:2]
 
 #using groups is equivilent to best model
 # closed_dat_group <- process.data(data.frame(CH[, c(2, 3)], loc = as.factor(loc)), group = "loc", model = "Huggins")
@@ -227,7 +224,7 @@ tab4e <-
   dplyr::mutate(p1 = recap / (cap + recap),
                 p2 = recap / sum(recap),
                 p3 = cap / sum(cap))
-tab4e
+tab4e %>% dplyr::arrange(loc, event)
 lapply(list(4:6, 7:9, 10:12, 13:15, 16:18), function(x) chisq.test(tab4e[x, c("cap", "recap")]))
 
 temp2 <-
@@ -259,7 +256,9 @@ lg <-
   tidyr::gather(event, lg) %>%
   dplyr::filter(lg != 0)
 ggplot(lg, aes(x = lg, color = event)) +
-  stat_ecdf()
+  stat_ecdf() +
+  ylab("Cumulative Proportion") +
+  scale_x_continuous(name = "Fork Length (mm)", breaks = seq(200, 600, 50))
 kSamples::ad.test(lapply(paste0("e", 1:6), function(x){lg$lg[lg$event == x]}))
 
 loc <- 
