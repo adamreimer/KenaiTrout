@@ -91,9 +91,9 @@ closed_models <- function(){
 # fit models in mark by calling function created above
 closed_results <- closed_models()
 closed_results$model.table
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$beta, digits = 3))[1:2]
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$real, digits = 3))[1:2]
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$derived, digits = 3))[1:2]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$beta, digits = 3))[1:3]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$real, digits = 3))[1:3]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$derived, digits = 3))[1:3]
 
 #using groups is equivilent to best model
 # closed_dat_group <- process.data(data.frame(CH[, c(2, 3)], loc = as.factor(loc)), group = "loc", model = "Huggins")
@@ -162,11 +162,11 @@ tab1 <-
                 r5 = ifelse(e1 + e2 + e3 + e4 >= 1, e5, 0),
                 r6 = ifelse(e1 + e2 + e3 + e4 + e5 >= 1, e6, 0),
                 a1 = 0,
-                a2 = e1 + n2,
-                a3 = e1 + n2 + n3,
-                a4 = e1 + n2 + n3 + n4,
-                a5 = e1 + n2 + n3 + n4 + n5,
-                a6 = e1 + n2 + n3 + n4 + n5 + n6) %>%
+                a2 = e1,
+                a3 = e1 + n2,
+                a4 = e1 + n2 + n3,
+                a5 = e1 + n2 + n3 + n4,
+                a6 = e1 + n2 + n3 + n4 + n5) %>%
   tidyr::gather(name, count) %>%
   dplyr::mutate(stat = gsub("^(.)\\d", "\\1", name),
                 event = gsub("^.(\\d)", "\\1", name)) %>%
@@ -208,7 +208,7 @@ temp <-
 
 tab4 <- 
   dplyr::group_by(temp, class, loc) %>%
-  dplyr::summarise(n = n()) %>%
+  dplyr::summarise(n = dplyr::n()) %>%
   tidyr::spread(class, n) %>%
   dplyr::mutate(p1 = recap / (cap + recap),
                 p2 = recap / sum(recap),
@@ -251,7 +251,7 @@ lg <-
   CH_UR18 %>% 
   tidyr::separate(ch, into = paste0("e", 1:6), sep = 1:5) %>%
   dplyr::select(dplyr::starts_with("e"), lg) %>%
-  dplyr::mutate_at(.vars = dplyr::vars(dplyr::starts_with("e")), .funs = dplyr::funs(as.numeric(.) * lg)) %>%
+  dplyr::mutate_at(.vars = dplyr::vars(dplyr::starts_with("e")), .funs = list(~ as.numeric(.) * lg)) %>%
   dplyr::select(-lg) %>%
   tidyr::gather(event, lg) %>%
   dplyr::filter(lg != 0)

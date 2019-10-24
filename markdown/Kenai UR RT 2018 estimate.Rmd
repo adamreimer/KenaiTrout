@@ -54,11 +54,11 @@ tab1 <-
                 r5 = ifelse(e1 + e2 + e3 + e4 >= 1, e5, 0),
                 r6 = ifelse(e1 + e2 + e3 + e4 + e5 >= 1, e6, 0),
                 a1 = 0,
-                a2 = e1 + n2,
-                a3 = e1 + n2 + n3,
-                a4 = e1 + n2 + n3 + n4,
-                a5 = e1 + n2 + n3 + n4 + n5,
-                a6 = e1 + n2 + n3 + n4 + n5 + n6) %>%
+                a2 = e1,
+                a3 = e1 + n2,
+                a4 = e1 + n2 + n3,
+                a5 = e1 + n2 + n3 + n4,
+                a6 = e1 + n2 + n3 + n4 + n5) %>%
   tidyr::gather(name, count) %>%
   dplyr::mutate(stat = gsub("^(.)\\d", "\\1", name),
                 event = gsub("^.(\\d)", "\\1", name)) %>%
@@ -194,9 +194,9 @@ knitr::kable(tab5, col.names = c("Length group (mm)", "New tags", "Recaptures", 
 chisq.test(tab5[, c("cap", "recap")])
 ```
   
-To directly asses the closure assumption I used the POPAN modeling framework we have used on middle river rainbows. Probability of capture was assumed to vary with FL group and time. For survival I considered two structures; one with an estimated constant survival and a second where survival is assumed 100%. The second structure is consistent with the closure assumption. For entrance probability I considered four structures; one where probability of entrance varies with time, a second where probability of entrance is constant, a third where fish only entered during the last event, and one where all of the fish were assumed to be within the study area prior to the first event. The last assumption is consistent with the closure assumption. Four models accounted for 95%+ of AIC weight. The 1st, 3rd and 4th ranked model were consistent with the closure assumption while the second ranked model included a small amount of immigration (~5% during each event). Note that we explicitly include the possibility that the closure assumption is violated during he last event but those models are not supported by the data. I see that the 2009 report had a lot of upstream migrating fish, but we don't see that this time around. 
+To directly asses the closure assumption I used the POPAN modeling framework we have used on middle river rainbows. Probability of capture was assumed to vary with FL group and time. For survival I considered two structures; one with an estimated constant survival and a second where survival is assumed 100%. The second structure is consistent with the closure assumption. For entrance probability I considered four structures; one where probability of entrance varies with time, a second where probability of entrance is constant, a third where fish only entered during the last event, and one where all of the fish were assumed to be within the study area prior to the first event. The last assumption is consistent with the closure assumption. Four models accounted for 95%+ of AIC weight. The 1st, 3rd and 4th ranked model were consistent with the closure assumption while the second ranked model included a small amount of immigration (~5% during each event). Note that we explicitly include the possibility that the closure assumption is violated during the last event but those models are not supported by the data. I see that the 2009 report had a lot of upstream migrating fish, but we don't see that this time around. 
   
-## Canidate models
+## Candidate models
 In an effort to simplify model selection I'll present the candidate models in 2 stages. The first stage contains basic closed multi-event mark recapture models; M0 (constant probability of capture), Mt (time varying probability of capture), Mh (individual heterogeneity in probability of capture), and Mb (behavioral effects in probability of capture). Individual heterogeneity was modeled in three ways; a general version that treats probability of capture as a mixture of two distributions, a version that used FL as a individual covariate, and a version that uses the river section of initial capture as a individual covariate. The results strongly support time varying capture probability.
 ```{r, echo = FALSE, warning = FALSE, results = FALSE, message = FALSE}
 closed_dat <- process.data(CH[, c(2, 3, 7, 8, 9, 10)], model = "Huggins")
