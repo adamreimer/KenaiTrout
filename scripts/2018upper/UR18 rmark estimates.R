@@ -91,9 +91,9 @@ closed_models <- function(){
 # fit models in mark by calling function created above
 closed_results <- closed_models()
 closed_results$model.table
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$beta, digits = 3))[1:3]
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$real, digits = 3))[1:3]
-lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$derived, digits = 3))[1:3]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$beta, digits = 3))[1:4]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$real, digits = 3))[1:4]
+lapply(rownames(closed_results$model.table), function(x) knitr::kable(closed_results[[as.numeric(x)]]$results$derived, digits = 3))[1:4]
 
 #using groups is equivilent to best model
 # closed_dat_group <- process.data(data.frame(CH[, c(2, 3)], loc = as.factor(loc)), group = "loc", model = "Huggins")
@@ -225,6 +225,7 @@ tab4e <-
                 p2 = recap / sum(recap),
                 p3 = cap / sum(cap))
 tab4e %>% dplyr::arrange(loc, event)
+tab4e
 lapply(list(4:6, 7:9, 10:12, 13:15, 16:18), function(x) chisq.test(tab4e[x, c("cap", "recap")]))
 
 temp2 <-
@@ -245,6 +246,7 @@ tab5 <-
                 p = out / total)
 tab5
 sum(c(13, 23, 8)) / sum(c(131, 86, 48))
+chisq.test(data.frame(tab5[, c("V1", "V2", "V3")], tab4$cap - tab4$recap))
 
 CH_UR18$lg[is.na(CH_UR18$lg)] <- mean(CH_UR18$lg, na.rm = TRUE)
 lg <- 

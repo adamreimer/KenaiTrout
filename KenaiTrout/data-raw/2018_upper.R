@@ -181,4 +181,4 @@ CH_UR18 <-
                    by = "tag") %>%
   dplyr::left_join(LH, by = "tag")
 
-devtools::use_data(CH_UR18, pkg = ".\\KenaiTrout", overwrite = TRUE)
+save(CH_UR18, file = ".\\KenaiTrout\\data\\CH_UR18.rda")
