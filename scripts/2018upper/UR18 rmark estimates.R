@@ -1,6 +1,7 @@
-library(KenaiTrout)
+source(".\\scripts\\Functions.R")
 library(RMark)
 library(ggplot2)
+CH_UR18 <- readRDS(".\\data\\CH_UR18.rds")
 loc = tidyr::separate(CH_UR18["lh"], lh, into = paste0("l", 1:6), sep = 1:5) %>% apply(1, function(x) min(as.numeric(x[x != 0])))
 CH_UR18$lg[is.na(CH_UR18$lg)] <- mean(CH_UR18$lg, na.rm = TRUE)
 lg_g = cut(CH_UR18$lg, breaks = c(0, 299, 499, 900), labels = c("small", "medium", "large"))
@@ -125,7 +126,7 @@ knitr::kable(closed_results[[6]]$results$beta, digits = 3)
 knitr::kable(closed_results[[6]]$results$real, digits = 3)
 knitr::kable(closed_results[[6]]$results$derived, digits = 3)
 
-read.delim(".\\KenaiTrout\\data-raw\\URlevel_18.txt", 
+read.delim(".\\data-raw\\URlevel_18.txt", 
            header = FALSE, 
            col.names = c("agency", "site", "datetime", "zone", "height", "P"), 
            skip = 28) %>%

@@ -2,7 +2,7 @@ library(magrittr)
 library(ggplot2)
 
 dat_raw <- 
-  readxl::read_excel(".\\KenaiTrout\\data-raw\\Copy of UPRRBT18_to Adam_round 2.xlsx",
+  readxl::read_excel(".\\data-raw\\Copy of UPRRBT18_to Adam_round 2.xlsx",
                      sheet = "UPRRBT18",
                      col_names = c("date0", "boat", "crew", "fishnum", "loc", "tag", "recap", "lg", "ad", "fate0", "comment1", "comment2", 
                                    "week", "comment3"),
@@ -181,4 +181,4 @@ CH_UR18 <-
                    by = "tag") %>%
   dplyr::left_join(LH, by = "tag")
 
-save(CH_UR18, file = ".\\KenaiTrout\\data\\CH_UR18.rda")
+saveRDS(CH_UR18, file = ".\\data\\CH_UR18.rds")

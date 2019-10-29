@@ -45,3 +45,24 @@ simul_js <- function(PHI, P, b, N){
   Nt <- colSums(CH.sur)    # Actual population size per event
   return(list(ch=ch, B=B, N=Nt))
 }
+
+
+
+#' Create a character vector of capture histories
+#'
+#' Copied from somewhere
+#'
+#' @param x A dataframe with rows of individuals and columns of capture events 
+#'
+#' @return A character vector
+#'
+#' @export
+pasty<-function(x) {
+  k<-ncol(x)
+  n<-nrow(x)
+  out<-array(dim=n)
+  for (i in 1:n){
+    out[i]<-paste(x[i,],collapse="")
+  }
+  return(out)
+}
