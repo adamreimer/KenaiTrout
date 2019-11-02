@@ -1,25 +1,17 @@
 ---
 title: "2018 UR estimate"
 author: "Adam Reimer"
-date: "May 14, 2019"
+date: "October 30, 2019"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-library(KenaiTrout)
 library(RMark)
+library(magrittr)
 library(ggplot2)
-loc = tidyr::separate(CH_UR18["lh"], lh, into = paste0("l", 1:6), sep = 1:5) %>% apply(1, function(x) min(as.numeric(x[x != 0])))
+# get/prep data
+CH_UR18 <- readRDS("..\\data\\CH_UR18.rds")
 CH_UR18$lg[is.na(CH_UR18$lg)] <- mean(CH_UR18$lg, na.rm = TRUE)
-lg_g = cut(CH_UR18$lg, breaks = c(0, 299, 499, 900), labels = c("small", "medium", "large"))
-CH <- 
-  CH_UR18 %>%
-  dplyr::mutate(lg_g = lg_g,
-                recap = ifelse(nchar(gsub("0", "", ch)) >= 2, TRUE, FALSE),
-                loc2 = as.numeric(loc == 2),
-                loc3 = as.numeric(loc == 3),
-                lg2 = as.numeric(lg_g == 2),
-                lg3 = as.numeric(lg_g == 3))
 ```
 
 ## Assumptions
@@ -32,7 +24,7 @@ One thing we might want to change in this report is the assumptions that we list
 This list of assumption is probably better (that our standard list about equal probabilities of capture) because we are explicitly modeling capture probability so saying that we assume it is equal for all fish does not make too much sense.
 
 ## Data Summaries
-The capture history shows substantial variation in the number of fish captured each week, which suggests a model where probability of capture varies by time strata. In the 2009 report you guys tied this variation to discharge, but that relationship in not obvious this year. We do see the percentage of recaptures increasing throughout the study, although not perfectly. This is suggestive of a closed population, but we will explicitly test the closure assumption later.
+The capture history shows substantial variation in the number of fish captured each week, which suggests a model where probability of capture varies by time strata. In the 2009 report you guys tied this variation to discharge, but that relationship is not obvious this year. We do see the percentage of recaptures increasing throughout the study, although not perfectly. This is suggestive of a closed population, but we will explicitly test the closure assumption later.
   
 Table 1.- Capture History of Upper Kenai River rainbow trout at least 200mm FL, 2 July--8 August, 2018.
 ```{r, echo = FALSE}
@@ -75,7 +67,7 @@ knitr::kable(tab1, col.names = paste0("Event ", 1:6), digits = 3)
 ```
   
 ```{r, echo = FALSE, fig.cap="Figure 1.- Kenai River gauge height at Cooper Landing, 2 July--8 August, 2018."}
-read.delim("..\\KenaiTrout\\data-raw\\URlevel_18.txt", 
+read.delim("..\\data-raw\\URlevel_18.txt", 
            header = FALSE, 
            col.names = c("agency", "site", "datetime", "zone", "height", "P"), 
            skip = 28) %>%
@@ -95,10 +87,11 @@ read.delim("..\\KenaiTrout\\data-raw\\URlevel_18.txt",
   scale_x_date(date_breaks = "week", labels = function(x){format.Date(x, "%B-%d")})
 ```
   
-The recapture rate differed by river section. As we have discussed, that seems predictable based on the back channels in section 3 (although this pattern was absent in 2009). This results suggests we should try models that stratify by river section or include river section (of initial capture in this case) as a probability of capture covariate. Depending on how strongly we feel about the back channel diluting effort in downstream areas we might want to try redefining the areas so that the most downstream area includes the entire back channel.
+I first ran this analysis with all six weekly events and found recapture rate differed by river section. In the May 14 version of this summary I included a covariate (location of initial capture) for probability of capture as an incomplete solution. I was never really happy with that however, for one thing fish migrate into different areas and it also complicates the analysis without benefit. Upon revisiting the analysis I realized that probability of capture only differed by location in one week (July 23-25). Because the weekly sample sizes were so large I tried rerunning the analysis without the June 23-25 samples. If we take this step the analysis is streamlined and we still pass precision objectives.
   
 Table 2.- Numbers and proportion of rainbow trout at least 200mm FL tagged and recaptured by river section in the upper Kenai River index area, 2 July--8 August, 2018.
 ```{r, echo = FALSE}
+#format data for location based tables
 temp <-
   CH_UR18 %>% 
   tidyr::separate(ch, into = paste0("e", 1:6), sep = 1:5) %>%
@@ -117,29 +110,24 @@ temp <-
                 r5 = ifelse(e1 + e2 + e3 + e4 >= 1 & e5 == 1, l5, 0),
                 r6 = ifelse(e1 + e2 + e3 + e4 + e5 >= 1 & e6 == 1, l6, 0)) %>%
   dplyr::select(tag, lg, dplyr::starts_with("n"), dplyr::starts_with("r")) %>%
-  tidyr::gather(event, loc, -tag, -lg) %>%
+  tidyr::gather(event, loc, - tag, -lg) %>%
   dplyr::filter(loc != 0) %>%
   dplyr::arrange(tag) %>%
   dplyr::mutate(class = ifelse(grepl("n", event), "cap", "recap"),
-                lg_group = cut(lg, 
-                               breaks = c(0, 199, 299, 399, 499, 900)))
+                lg_group = cut(lg, breaks = c(0, 199, 249, 299, 349, 399, 449, 499, 900)))
 
 tab4 <- 
   dplyr::group_by(temp, class, loc) %>%
-  dplyr::summarise(n = n()) %>%
+  dplyr::summarise(n = dplyr::n()) %>%
   tidyr::spread(class, n) %>%
-  dplyr::mutate(total = (cap + recap),
-                p1 = recap / total,
+  dplyr::mutate(p1 = recap / (cap + recap),
                 p2 = recap / sum(recap),
                 p3 = cap / sum(cap))
-knitr::kable(tab4, col.names = c("River Section", "New tags", "Recaptures", "Total", "Proportion Recaptured", "Proprtion of all Recaptures", "Proportion of all Captures"))
+knitr::kable(tab4, col.names = c("River Section", "New tags", "Recaptures", "Proportion Recaptured", "Proportion of all Recaptures", "Proportion of all Captures"))
 chisq.test(tab4[, c("cap", "recap")])
-```
-  
-We see a small amount of mixing between river sections. In this case we seem to have both up and downstream movement, at a moderate level. Of all the fish recaptured `r format(sum(c(13, 23, 8)) / sum(c(131, 86, 48)), digits = 1)` were recaptured in a different section than they were marked. It seems likely that fish near the boundaries of our study area migrate across it and the home range of our sampled fish is likely larger than the geographic extent of the index area.
-  
-Table 3.- Movement of rainbow trout at least 200mm FL between river sections in the Upper Kenai River index area, 2 July--8 August, 2018. 
-```{r, echo = FALSE}
+
+#movement both up and downstream
+#population home range is likley larger than the sampling footprint
 temp2 <-
   temp %>%
   dplyr::mutate(class2 = ifelse(class == "cap", class, event)) %>%
@@ -156,7 +144,12 @@ tab5 <-
   dplyr::mutate(total = V1 + V2 + V3,
                 out = total - diag(matrix(c(V1, V2, V3), 3, 3)),
                 p = out / total)
-
+```
+  
+We see a small amount of mixing between river sections. In this case we seem to have both up and downstream movement, at a moderate level. Of all the fish recaptured `r format(sum(tab5$out) / sum(tab5$total), digits = 3)` were recaptured in a different section than they were marked. It seems likely that fish near the boundaries of our study area migrate across it and the home range of our sampled fish is likely larger than the geographic extent of the index area.
+  
+Table 3.- Movement of rainbow trout at least 200mm FL between river sections in the Upper Kenai River index area, 2 July--8 August, 2018. 
+```{r, echo = FALSE}
 rownames(tab5) <- c("Captured in 1", "Captured in 2", "Captured in 3")
 knitr::kable(tab5, col.names = c("1", "2", "3", "Total recaptures", "# out", "Proportion out"))
 ```
@@ -169,7 +162,7 @@ lg <-
   CH_UR18 %>% 
   tidyr::separate(ch, into = paste0("e", 1:6), sep = 1:5) %>%
   dplyr::select(dplyr::starts_with("e"), lg) %>%
-  dplyr::mutate_at(.vars = dplyr::vars(dplyr::starts_with("e")), .funs = dplyr::funs(as.numeric(.) * lg)) %>%
+  dplyr::mutate_at(.vars = dplyr::vars(dplyr::starts_with("e")), .funs = list(~ as.numeric(.) * lg)) %>%
   dplyr::select(-lg) %>%
   tidyr::gather(event, lg) %>%
   dplyr::filter(lg != 0)
@@ -177,159 +170,120 @@ ggplot(lg, aes(x = lg, color = event)) +
   stat_ecdf() +
   ylab("Cumulative Proportion") +
   scale_x_continuous(name = "Fork Length (mm)", breaks = seq(200, 600, 50))
-kSamples::ad.test(lapply(paste0("e", 1:6), function(x){lg$lg[lg$event == x]}))
+kSamples::ad.test(lapply(paste0("e", 1:5), function(x){lg$lg[lg$event == x]}))
 ```
   
 Recapture rates also increases for the larger length groups, although the pattern is weaker than observed in 2009. As an aside the notation (199,299] should be read as 200-299 because the rounded bracket indicates the range does not include the adjacent number while the square bracket indicates the range does include the adjacent number.
   
 Table 4.- Number of rainbow trout captured, recaptured and the proportion recaptured in the Upper Kenai River index area by 100mm length groups, 2 July--8 August, 2018. 
 ```{r, echo = FALSE}
-tab5 <- 
+tab6 <- 
   dplyr::group_by(temp, class, lg_group) %>%
   dplyr::summarise(n = n()) %>%
   tidyr::spread(class, n) %>%
   dplyr::mutate(total = (cap + recap),
                 p1 = recap / total)
-knitr::kable(tab5, col.names = c("Length group (mm)", "New tags", "Recaptures", "Total", "Proportion Recaptured"))
-chisq.test(tab5[, c("cap", "recap")])
+knitr::kable(tab6, col.names = c("Length group (mm)", "New tags", "Recaptures", "Total", "Proportion Recaptured"))
+chisq.test(tab6[, c("cap", "recap")])
 ```
   
-To directly asses the closure assumption I used the POPAN modeling framework we have used on middle river rainbows. Probability of capture was assumed to vary with FL group and time. For survival I considered two structures; one with an estimated constant survival and a second where survival is assumed 100%. The second structure is consistent with the closure assumption. For entrance probability I considered four structures; one where probability of entrance varies with time, a second where probability of entrance is constant, a third where fish only entered during the last event, and one where all of the fish were assumed to be within the study area prior to the first event. The last assumption is consistent with the closure assumption. Four models accounted for 95%+ of AIC weight. The 1st, 3rd and 4th ranked model were consistent with the closure assumption while the second ranked model included a small amount of immigration (~5% during each event). Note that we explicitly include the possibility that the closure assumption is violated during the last event but those models are not supported by the data. I see that the 2009 report had a lot of upstream migrating fish, but we don't see that this time around. 
+To directly asses the closure assumption I used the POPAN modeling framework we have used on middle river rainbows. Probability of capture was assumed to vary with FL group and time. For survival I considered two structures; one with an estimated constant survival and a second where survival is assumed 100%. The second structure is consistent with the closure assumption. For entrance probability I considered four structures; one where probability of entrance varies with time, a second where probability of entrance is constant, a third where fish only entered during the last event, and one where all of the fish were assumed to be within the study area prior to the first event. The last assumption is consistent with the closure assumption. In Mark we are able to run all combinations of these parameter structures and decide which combinations are best supported by the data. Four models accounted for 95%+ of AIC weight. Three where consistent with the closure assumption. The forth model include the possibility that the closure assumption violated by migration during the last event but those models are not supported by the data. I see that the 2009 report had a lot of upstream migrating fish, but we don't see that this time around. 
   
 ## Candidate models
 In an effort to simplify model selection I'll present the candidate models in 2 stages. The first stage contains basic closed multi-event mark recapture models; M0 (constant probability of capture), Mt (time varying probability of capture), Mh (individual heterogeneity in probability of capture), and Mb (behavioral effects in probability of capture). Individual heterogeneity was modeled in three ways; a general version that treats probability of capture as a mixture of two distributions, a version that used FL as a individual covariate, and a version that uses the river section of initial capture as a individual covariate. The results strongly support time varying capture probability.
-```{r, echo = FALSE, warning = FALSE, results = FALSE, message = FALSE}
-closed_dat <- process.data(CH[, c(2, 3, 7, 8, 9, 10)], model = "Huggins")
-closed_ddl <- make.design.data(closed_dat)
-
-closed_models1 <- function(){
-  # Define parameter models
-  
-  #Basic Models -Mt best model by 41DeltaAIC
-  p.M0 <- list(formula=~1, share=TRUE)
-  p.Mt <- list(formula=~time, share=TRUE)
-  p.Mb <- list(formula=~1 + c, share=TRUE)
-  p.Mh.lg <- list(formula=~lg, share=TRUE)
-  p.Mh.lgg <- list(formula=~lg2 + lg3, share=TRUE)
-  p.Mh.loc <- list(formula=~loc2 + loc3, share=TRUE)
-
-  mod_list <- create.model.list("Huggins")
-  mod_results <- mark.wrapper(mod_list, data = closed_dat, ddl = closed_ddl)
-
-  #Mh.mix
-  p.Mh.mix <- list(formula=~mixture)
-  huggins.Mh.mix <- mark(data = CH_UR18[2], model="HugHet", model.parameters = list(p = p.Mh.mix))
-
-  merge.mark(mod_results, huggins.Mh.mix)
-}
-# fit models in mark by calling function created above
-closed_results1 <- closed_models1()
-```
 ```{r}
+closed_results1 <- readRDS("..\\scripts\\2018upper\\closed_results1.rds")
 knitr::kable(closed_results1$model.table,
              digits = 3)
 ```
   
-In the second stage of model selection I combined some of the lesser preforming models with Mt. The top performing model allowed probability of capture to vary by time, fish size and location of initial capture. The second model is similar but adds a behavior effect. Because parameter estimates for the behavior effect include zero, this model should not be considered.
-```{r, echo = FALSE, warning = FALSE, results = FALSE, message = FALSE}
-closed_models2 <- function(){
-  # Define parameter models
-  
-  #Combined Models -Mth.lgloc best model by 13DeltaAIC (Mtbh.lgloc close but c insignificant)
-  p.Mtb <- list(formula=~time + c, share=TRUE)
-  p.Mth.lg <- list(formula=~time*lg, share=TRUE)
-  p.Mth.loc <- list(formula=~time + loc2 + loc3, share=TRUE)
-  p.Mtbh.loc <- list(formula=~time + c + loc2 + loc3, share=TRUE)
-  p.Mtbh.lg <- list(formula=~time*lg + c, share=TRUE)
-  p.Mth.lgloc <- list(formula=~time*lg + loc2 + loc3, share=TRUE)
-  p.Mtbh.lgloc <- list(formula=~time*lg + c + loc2 + loc3, share=TRUE)
-
-  mod_list <- create.model.list("Huggins")
-  mod_results <- mark.wrapper(mod_list, data = closed_dat, ddl = closed_ddl)
-}
-# fit models in mark by calling function created above
-closed_results2 <- closed_models2()
-```
+In the second stage of model selection I combined some of the lesser preforming models with Mt. The top performing model allowed probability of capture to vary by time and fish size. The second model is similar but adds a behavior effect. Because parameter estimates for the behavior effect include zero, this model should not be considered.
 ```{r}
+closed_results2 <- readRDS("..\\scripts\\2018upper\\closed_results2.rds")
+bestmod2 <- as.numeric(rownames(closed_results2$model.table)[1:2])
 knitr::kable(closed_results2$model.table[, -which(names(closed_results2$model.table) %in% c("p", "c"))],
              digits = 3)
 ```
   
 Table 5.- Parameter estimates for the top preforming abundance estimation model, rainbow trout at least 200mm FL between river sections in the Upper Kenai River index area, 2 July--8 August, 2018.
 ```{r, echo = FALSE}
-knitr::kable(closed_results2[[6]]$results$beta, digits = 3)
+knitr::kable(closed_results2[[bestmod2[1]]]$results$beta, digits = 3)
 ```
   
-```{r, echo = FALSE, fig.height=10, fig.width=8, fig.cap = "Figure 3.- Predicted probability of rainbow trout capture vs. fork length for each event and river section of initial capture in the Upper Kenai River index area, 2 July--8 August, 2018."}
-#closed_ddl
-plot_dat <- 
-  rbind(
-    expand.grid(lg = seq(200,600,25), loc2 = 0, loc3 = 0, index = 1:6),
-    expand.grid(lg = seq(200,600,25), loc2 = 1, loc3 = 0, index = 1:6),
-    expand.grid(lg = seq(200,600,25), loc2 = 0, loc3 = 1, index = 1:6)
-  )
+```{r, echo = FALSE, fig.height=6, fig.width=8, fig.cap = "Figure 3.- Predicted probability of rainbow trout capture vs. fork length for each event and river section of initial capture in the Upper Kenai River index area, 2 July--8 August, 2018."}
+plot_dat <- expand.grid(lg = seq(200,600,25), index = 1:6)
 event_labs <- c("July 2-5", "July 9-11", "July 16-18", "July 23-25", "July 30-Aug. 1", "Aug 6-8")
-loc_labs <- c("River mile 72-73.2", "River mile 70.8-72", "River mile 69.6-70.8")
-
-
-covariate.predictions(closed_results2[[6]], data = plot_dat, indices = c(1, 6))$estimates %>%
-  dplyr::mutate(event = factor(index, labels = event_labs),
-                loc = factor(ifelse(loc2 == 1, "2", ifelse(loc3 == 1, "3", "1")), labels = loc_labs)) %>%
+covariate.predictions(closed_results2[[bestmod2[1]]], data = plot_dat, indices = c(1, 6))$estimates %>%
+  dplyr::mutate(event = factor(index, labels = event_labs)) %>%
   ggplot(aes(x = lg, ymin = lcl, ymax = ucl)) +
     geom_ribbon(alpha = 0.25, linetype = 0) +
     geom_line(aes(y = estimate)) +
-    facet_grid(event~loc) +
+    facet_grid(.~event) +
     labs(y = "Probability of Capture", x = "Total Length")
 ``` 
   
 Table 6.- Real parameter estimates for the top preforming abundance estimation model, rainbow trout at least 200mm FL between river sections in the Upper Kenai River index area, 2 July--8 August, 2018.
 ```{r, echo = FALSE}
-knitr::kable(closed_results2[[6]]$results$real, digits = 3)
+knitr::kable(closed_results2[[bestmod2[1]]]$results$real, digits = 3)
 ```
   
 Table 7.- Estimated abundance of rainbow trout at least 200mm FL between river sections in the Upper Kenai River index area, 2 July--8 August, 2018.
 ```{r, echo = FALSE}
-knitr::kable(closed_results2[[6]]$results$derived, digits = 3)
+knitr::kable(closed_results2[[bestmod2[1]]]$results$derived, digits = 3)
 ```
   
 Table 8.- Estimated abundance and proportion of rainbow trout by fork length group in the Upper Kenai River index area, 2 July--8 August, 2018.
 ```{r, echo = FALSE}
 #Weighted length comp
-alpha <- closed_results2[[6]]$results$beta$estimate[grepl("p:\\(|p:time\\d$", rownames(closed_results2[[6]]$results$beta))]
-beta <- closed_results2[[6]]$results$beta$estimate[grepl("p:lg|p:time\\d:lg", rownames(closed_results2[[6]]$results$beta))] 
-gamma <- closed_results2[[6]]$results$beta$estimate[grepl("loc", rownames(closed_results2[[6]]$results$beta))]
-
+alpha <- closed_results2[[bestmod2[1]]]$results$beta$estimate[grepl("p:\\(|p:time\\d$", rownames(closed_results2[[bestmod2[1]]]$results$beta))]
+beta <- closed_results2[[bestmod2[1]]]$results$beta$estimate[grepl("p:lg|p:time\\d:lg", rownames(closed_results2[[bestmod2[1]]]$results$beta))] 
 num <- 
-  CH %>% 
+  CH_UR18 %>% 
   dplyr::mutate(event = regexpr("1", ch),
                 c_ik = ifelse(event == 1,
                               exp(alpha[1] + beta[1] * lg)/(1 + exp(alpha[1] + beta[1] * lg)),
-                              exp(alpha[1] + alpha[event] + beta[1] * lg + beta[event] * lg + gamma[1] * loc2 + gamma[2] * loc3) /
-                                 (1+ exp(alpha[1] + alpha[event] + beta[1] * lg + beta[event] * lg + gamma[1] * loc2 + gamma[2] * loc3))),
+                              exp(alpha[1] + alpha[event] + beta[1] * lg + beta[event] * lg) /
+                                 (1+ exp(alpha[1] + alpha[event] + beta[1] * lg + beta[event]))),
                 lg_bin = cut(lg, breaks = seq(200, 600, 50), right = FALSE)) %>%
   dplyr::group_by(event, lg_bin) %>%
-  dplyr::summarize(num_p = sum(1 / c_ik),
-                   n_ij = n())
+  dplyr::summarize(num_p = sum(1 / c_ik), n_ij = n())
 dem <- 
   num %>% 
   dplyr::summarise(dem_p = sum(num_p),
                    n_i = sum(n_ij))
-
-n <- sum(dem$n_i)
-
-dplyr::left_join(num, dem, by = "event") %>%
+temp_age <- 
+  dplyr::left_join(num, dem, by = "event") %>%
   dplyr::ungroup() %>%
   dplyr::mutate(p_ij = num_p/dem_p,
-                w_i = n_i / n) %>%
+                w_i = n_i / sum(dem$n_i),
+                lg_bin2 = ifelse(lg_bin %in% c("[200,250)", "[250,300)"), "[200,300)", "[300,600)"))
+
+temp_age %>%
   dplyr::group_by(lg_bin) %>%
   dplyr::summarise(n_j = sum(n_ij),
-                   pj_raw = n_j / n,
-                   se_pj_raw = sqrt(pj_raw * (1 - pj_raw) / (n - 1)),
+                   pj_raw = n_j / sum(dem$n_i),
+                   se_pj_raw = sqrt(pj_raw * (1 - pj_raw) / (sum(dem$n_i) - 1)),
                    p_j = sum(w_i * p_ij),
                    se_pj = se_pj_raw,
-                   N_j = p_j * closed_results2[[6]]$results$derived$'N Population Size'$estimate,
-                   se_N_j = sqrt(closed_results2[[6]]$results$derived$'N Population Size'$estimate^2 * se_pj^2 +
-                                   p_j^2 * closed_results2[[6]]$results$derived$'N Population Size'$se^2 -
-                                   se_pj^2 * closed_results2[[6]]$results$derived$'N Population Size'$se^2)) %>%
+                   N_j = p_j * closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$estimate,
+                   se_N_j = sqrt(closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$estimate^2 * se_pj^2 +
+                                   p_j^2 * closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$se^2 -
+                                   se_pj^2 * closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$se^2)) %>%
+  knitr::kable(digits = 3)
+```
+
+```{r}
+#again for >300mm
+temp_age %>%
+  dplyr::group_by(lg_bin2) %>%
+  dplyr::summarise(n_j = sum(n_ij),
+                   pj_raw = n_j / sum(dem$n_i),
+                   se_pj_raw = sqrt(pj_raw * (1 - pj_raw) / (sum(dem$n_i) - 1)),
+                   p_j = sum(w_i * p_ij),
+                   se_pj = se_pj_raw,
+                   N_j = p_j * closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$estimate,
+                   se_N_j = sqrt(closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$estimate^2 * se_pj^2 +
+                                   p_j^2 * closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$se^2 -
+                                   se_pj^2 * closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$se^2)) %>%
   knitr::kable(digits = 3)
 ```

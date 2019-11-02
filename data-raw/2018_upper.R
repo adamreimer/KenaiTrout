@@ -182,3 +182,113 @@ CH_UR18 <-
   dplyr::left_join(LH, by = "tag")
 
 saveRDS(CH_UR18, file = ".\\data\\CH_UR18.rds")
+
+
+
+#### look at movement between areas ####
+LH2 <-
+  dat_UR18 %>%
+  dplyr::select(l = week, tag, loc) %>%
+  tidyr::spread(l, loc, fill = 0, sep = "") %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise_all(sum)
+
+CH2 <-
+  dat_UR18 %>%
+  dplyr::select(e = week, tag) %>%
+  dplyr::mutate(cap = 1) %>%
+  tidyr::spread(e, cap, fill = 0, sep = "") %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise_all(sum)
+
+temp <-
+  dplyr::left_join(CH2, LH2, by = "tag") %>%
+  dplyr::mutate(n1 = l1,
+                n2 = ifelse(e1 == 0, l2, 0),
+                n3 = ifelse(e1 + e2 == 0, l3, 0),
+                n4 = ifelse(e1 + e2 + e3 == 0, l4, 0),
+                n5 = ifelse(e1 + e2 + e3 + e4 == 0, l5, 0),
+                n6 = ifelse(e1 + e2 + e3 + e4 + e5 == 0, l6, 0),
+                r1 = 0,
+                r2 = ifelse(e1 == 1 & e2 == 1, l2, 0),
+                r3 = ifelse(e1 + e2 >= 1 & e3 == 1, l3, 0),
+                r4 = ifelse(e1 + e2 + e3 >= 1 & e4 == 1, l4, 0),
+                r5 = ifelse(e1 + e2 + e3 + e4 >= 1 & e5 == 1, l5, 0),
+                r6 = ifelse(e1 + e2 + e3 + e4 + e5 >= 1 & e6 == 1, l6, 0)) %>%
+  dplyr::select(tag, dplyr::starts_with("n"), dplyr::starts_with("r")) %>%
+  tidyr::gather(event, loc, - tag) %>%
+  dplyr::filter(loc != 0) %>%
+  dplyr::arrange(tag) %>%
+  dplyr::mutate(class = ifelse(grepl("n", event), "cap", "recap"))
+
+tab4 <- 
+  dplyr::group_by(temp, class, loc) %>%
+  dplyr::summarise(n = dplyr::n()) %>%
+  tidyr::spread(class, n) %>%
+  dplyr::mutate(p1 = recap / (cap + recap),
+                p2 = recap / sum(recap, na.rm = TRUE),
+                p3 = cap / sum(cap))
+tab4
+
+strata <-
+  dplyr::mutate(temp, event = gsub(".(\\d)", "\\1", event)) %>%
+  dplyr::group_by(class, event, loc) %>%
+  dplyr::summarise(n = n()) %>%
+  tidyr::spread(class, n) %>%
+  dplyr::mutate(p1 = recap / (cap + recap),
+                p2 = recap / sum(recap, na.rm = TRUE),
+                p3 = cap / sum(cap))
+strata %>% print(n = 100)
+
+temp2 <-
+  temp %>%
+  dplyr::mutate(class2 = ifelse(class == "cap", class, event)) %>%
+  dplyr::select(-event, -class) %>%
+  dplyr::group_by(tag) %>%
+  tidyr::spread(class2, loc)
+
+tab5 <-
+  sapply(1:16, function(x){
+    dat <- temp2[temp2$cap == x, ]
+    table(factor(c(dat$r2, dat$r3, dat$r4, dat$r5, dat$r6), levels = 1:16))
+  }) %>%
+  as.data.frame()
+
+tab5$total = apply(tab5, 1, sum)
+tab5$out = tab5$total - diag(as.matrix(tab5[, 1:16]))
+tab5$p = tab5$out / tab5$total
+tab5
+
+
+
+#censor week 4
+week4recaps <- dat_UR18$tag[dat_UR18$week == 4 & dat_UR18$recap == FALSE]
+dat_UR18_censor <- dat_UR18[dat_UR18$week != 4, ] 
+dat_UR18_censor <- dat_UR18_censor[!(dat_UR18_censor$tag %in% week4recaps), ]
+
+LH_censor <-
+  dat_UR18_censor %>%
+  dplyr::select(week, tag, loc) %>%
+  dplyr::mutate(loc = cut(loc, breaks = c(0, 5.5, 10.5, 17), labels = FALSE)) %>%
+  tidyr::spread(week, loc, fill = 0, sep = "") %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise_all(sum) %>%
+  dplyr::mutate(lh = paste0(week1, week2, week3, week5, week6)) %>%
+  dplyr::select(-dplyr::starts_with("week"))
+
+CH_UR18_censor <-
+  dat_UR18_censor %>%
+  dplyr::select(week, tag) %>%
+  dplyr::mutate(cap = 1) %>%
+  tidyr::spread(week, cap, fill = 0, sep = "") %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise_all(sum) %>%
+  dplyr::mutate(ch = paste0(week1, week2, week3, week5, week6)) %>%
+  dplyr::select(-dplyr::starts_with("week")) %>%
+  dplyr::left_join(dat_UR18_censor[, c("tag", "lg")] %>%
+                     dplyr::group_by(tag) %>%
+                     dplyr::summarise(lg = as.integer(mean(lg))), 
+                   by = "tag") %>%
+  dplyr::left_join(LH_censor, by = "tag")
+
+saveRDS(CH_UR18_censor, file = ".\\data\\CH_UR18_censor.rds")
