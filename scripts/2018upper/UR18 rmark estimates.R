@@ -383,7 +383,7 @@ knitr::kable(closed_results2[[bestmod2[1]]]$results$derived, digits = 3)
 
 # P(cap) by time and event
 closed_ddl
-plot_dat <-  expand.grid(lg = seq(200,600,25), index = 1:6))
+plot_dat <-  expand.grid(lg = seq(200,600,25), index = 1:6)
 event_labs <- c("July 2-5", "July 9-11", "July 16-18", "July 23-25", "July 30-Aug. 1", "Aug 6-8")
 covariate.predictions(closed_results2[[bestmod2[1]]], data = plot_dat, indices = c(1, 6))$estimates %>%
   dplyr::mutate(event = factor(index, labels = event_labs)) %>%
@@ -397,7 +397,7 @@ covariate.predictions(closed_results2[[bestmod2[1]]], data = plot_dat, indices =
 alpha <- closed_results2[[bestmod2[1]]]$results$beta$estimate[grepl("p:\\(|p:time\\d$", rownames(closed_results2[[bestmod2[1]]]$results$beta))]
 beta <- closed_results2[[bestmod2[1]]]$results$beta$estimate[grepl("p:lg|p:time\\d:lg", rownames(closed_results2[[bestmod2[1]]]$results$beta))] 
 num <- 
-  CH %>% 
+  CH_UR18 %>% 
   dplyr::mutate(event = regexpr("1", ch),
                 c_ik = ifelse(event == 1,
                               exp(alpha[1] + beta[1] * lg)/(1 + exp(alpha[1] + beta[1] * lg)),
@@ -441,3 +441,4 @@ temp_age %>%
                    se_N_j = sqrt(closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$estimate^2 * se_pj^2 +
                                    p_j^2 * closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$se^2 -
                                    se_pj^2 * closed_results2[[bestmod2[1]]]$results$derived$'N Population Size'$se^2))
+
