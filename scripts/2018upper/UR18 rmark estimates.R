@@ -5,29 +5,9 @@ library(ggplot2)
 CH_UR18 <- readRDS(".\\data\\CH_UR18.rds")
 CH_UR18$lg[is.na(CH_UR18$lg)] <- mean(CH_UR18$lg, na.rm = TRUE)
 
-#Gauge height vrs event
-read.delim(".\\data-raw\\URlevel_18.txt", 
-           header = FALSE, 
-           col.names = c("agency", "site", "datetime", "zone", "height", "P"), 
-           skip = 28) %>%
-  dplyr::mutate(date = as.Date(datetime, "%Y-%m-%d %H:%M")) %>%
-  dplyr::filter(date <= as.Date("2018-08-08")) %>%
-  dplyr::group_by(date) %>%
-  dplyr::summarise(height = mean(height)) %>%
-  ggplot(aes(x = date, y = height)) +
-  geom_line() +
-  annotate("rect", xmin = as.Date("2018-07-02"), xmax = as.Date("2018-07-05"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
-  annotate("rect", xmin = as.Date("2018-07-09"), xmax = as.Date("2018-07-11"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
-  annotate("rect", xmin = as.Date("2018-07-16"), xmax = as.Date("2018-07-18"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
-  annotate("rect", xmin = as.Date("2018-07-23"), xmax = as.Date("2018-07-25"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
-  annotate("rect", xmin = as.Date("2018-07-30"), xmax = as.Date("2018-08-01"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
-  annotate("rect", xmin = as.Date("2018-08-06"), xmax = as.Date("2018-08-08"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
-  labs(y = "Gauge Height", x = "Date") +
-  scale_x_date(date_breaks = "week", labels = function(x){format.Date(x, "%B-%d")})
-
 #Look for patterns in recpature rates
 #Capture History table
-tab1 <-
+tab_ch <-
   CH_UR18["ch"] %>% 
   tidyr::separate(ch, into = paste0("e", 1:6), sep = 1:5) %>%
   dplyr::mutate_all(.funs = as.numeric) %>%
@@ -57,129 +37,112 @@ tab1 <-
   tidyr::spread(stat, count) %>%
   dplyr::select(capture = e, new = n, recap = r, at_large = a) %>%
   dplyr::mutate(pcap = recap / capture,
-                plarge = recap / at_large,
-                event = 1:6)
+                plarge = recap / at_large) %>%
+  setNames(c("Captured", "New tags", "Recaptures", "At large", "Recaptures / Captures", "Recaptures / At Large"))
+knitr::kable(t(tab_ch), col.names = paste0("Event ", 1:6), digits = 3)
 
-tab1
 #increasing recapture rate implies closure
-ggplot(tab1, aes(x = event, y = pcap)) +
+ggplot(data.frame(event = 1:6, pcap = tab_ch$'Recaptures / Captures'), aes(x = event, y = pcap)) +
   geom_point()  +
   ggplot2::geom_smooth(method=lm, se=TRUE)
 
-#format data for location based tables
-temp <-
-  CH_UR18 %>% 
-  tidyr::separate(ch, into = paste0("e", 1:6), sep = 1:5) %>%
-  tidyr::separate(lh, into = paste0("l", 1:6), sep = 1:5) %>%
-  dplyr::mutate_all(.funs = as.numeric) %>%
-  dplyr::mutate(n1 = l1,
-                n2 = ifelse(e1 == 0, l2, 0),
-                n3 = ifelse(e1 + e2 == 0, l3, 0),
-                n4 = ifelse(e1 + e2 + e3 == 0, l4, 0),
-                n5 = ifelse(e1 + e2 + e3 + e4 == 0, l5, 0),
-                n6 = ifelse(e1 + e2 + e3 + e4 + e5 == 0, l6, 0),
-                r1 = 0,
-                r2 = ifelse(e1 == 1 & e2 == 1, l2, 0),
-                r3 = ifelse(e1 + e2 >= 1 & e3 == 1, l3, 0),
-                r4 = ifelse(e1 + e2 + e3 >= 1 & e4 == 1, l4, 0),
-                r5 = ifelse(e1 + e2 + e3 + e4 >= 1 & e5 == 1, l5, 0),
-                r6 = ifelse(e1 + e2 + e3 + e4 + e5 >= 1 & e6 == 1, l6, 0)) %>%
-  dplyr::select(tag, lg, dplyr::starts_with("n"), dplyr::starts_with("r")) %>%
-  tidyr::gather(event, loc, - tag, -lg) %>%
-  dplyr::filter(loc != 0) %>%
-  dplyr::arrange(tag) %>%
-  dplyr::mutate(class = ifelse(grepl("n", event), "cap", "recap"),
-                lg_group = cut(lg, breaks = c(0, 199, 249, 299, 349, 399, 449, 499, 900)))
+#Gauge height vrs event
+read.delim(".\\data-raw\\URlevel_18.txt", 
+           header = FALSE, 
+           col.names = c("agency", "site", "datetime", "zone", "height", "P"), 
+           skip = 28) %>%
+  dplyr::mutate(date = as.Date(datetime, "%Y-%m-%d %H:%M")) %>%
+  dplyr::filter(date <= as.Date("2018-08-08")) %>%
+  dplyr::group_by(date) %>%
+  dplyr::summarise(height = mean(height)) %>%
+  ggplot(aes(x = date, y = height)) +
+  geom_line() +
+  annotate("rect", xmin = as.Date("2018-07-02"), xmax = as.Date("2018-07-05"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
+  annotate("rect", xmin = as.Date("2018-07-09"), xmax = as.Date("2018-07-11"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
+  annotate("rect", xmin = as.Date("2018-07-16"), xmax = as.Date("2018-07-18"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
+  annotate("rect", xmin = as.Date("2018-07-23"), xmax = as.Date("2018-07-25"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
+  annotate("rect", xmin = as.Date("2018-07-30"), xmax = as.Date("2018-08-01"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
+  annotate("rect", xmin = as.Date("2018-08-06"), xmax = as.Date("2018-08-08"), ymin = -Inf, ymax = Inf, alpha = 0.2) +
+  labs(y = "Gauge Height", x = "Date") +
+  scale_x_date(date_breaks = "week", labels = function(x){format.Date(x, "%B-%d")})
 
-tab4 <- 
-  dplyr::group_by(temp, class, loc) %>%
-  dplyr::summarise(n = dplyr::n()) %>%
-  tidyr::spread(class, n) %>%
-  dplyr::mutate(p1 = recap / (cap + recap),
-                p2 = recap / sum(recap),
-                p3 = cap / sum(cap))
-#unequal recapture rates by area
-tab4
-chisq.test(tab4[, c("cap", "recap")])
+#Location differences
+dat_UR18 <- readRDS(".\\data\\dat_UR18.rds")
+temp0 <-
+  dplyr::mutate(dat_UR18, 
+                recap = ifelse(recap == 0, "cap", "recap"),
+                area = cut(loc, breaks = c(0, 5.5, 10.5, 17), labels = FALSE)) %>% 
+  dplyr::mutate(recap2 = ifelse(recap == "cap", recap, paste0("r", week))) %>%
+  dplyr::select(-week, -recap) %>%
+  dplyr::group_by(tag) 
+temp1 <- 
+  temp0 %>%
+  dplyr::select(-loc) %>%
+  tidyr::spread(recap2, area)
 
-#but difference is only significant in one event (week 4)
-tab4e <- 
-  dplyr::mutate(temp, event = gsub(".(\\d)", "\\1", event)) %>%
-  dplyr::group_by(class, event, loc) %>%
-  dplyr::summarise(n = n()) %>%
-  tidyr::spread(class, n) %>%
-  dplyr::mutate(p1 = recap / (cap + recap),
-                p2 = recap / sum(recap),
-                p3 = cap / sum(cap))
-tab4e
-lapply(list(4:6, 7:9, 10:12, 13:15, 16:18), function(x) chisq.test(tab4e[x, c("cap", "recap")]))
+#Movement by fishing area
+tab_movearea <-
+  lapply(1:3, function(x){
+    dat <- temp1[temp1$cap == x, ]
+    table(factor(c(dat$r2, dat$r3, dat$r4, dat$r5, dat$r6), levels = 1:3))
+  }) %>% 
+  do.call(rbind, .) %>%
+  as.data.frame()
+tab_movearea$total = apply(tab_movearea, 1, sum)
+tab_movearea$out = tab_movearea$total - diag(as.matrix(tab_movearea[, 1:3]))
+tab_movearea$p = tab_movearea$out / tab_movearea$total
 
-#####equal recapture rates by area in 4th week censored
-CH_UR18_censor <- readRDS(".\\data\\CH_UR18_censor.rds")
-temp_censor <-
-  CH_UR18_censor %>% 
-  tidyr::separate(ch, into = paste0("e", 1:5), sep = 1:4) %>%
-  tidyr::separate(lh, into = paste0("l", 1:5), sep = 1:4) %>%
-  dplyr::mutate_all(.funs = as.numeric) %>%
-  dplyr::mutate(n1 = l1,
-                n2 = ifelse(e1 == 0, l2, 0),
-                n3 = ifelse(e1 + e2 == 0, l3, 0),
-                n4 = ifelse(e1 + e2 + e3 == 0, l4, 0),
-                n5 = ifelse(e1 + e2 + e3 + e4 == 0, l5, 0),
-                r1 = 0,
-                r2 = ifelse(e1 == 1 & e2 == 1, l2, 0),
-                r3 = ifelse(e1 + e2 >= 1 & e3 == 1, l3, 0),
-                r4 = ifelse(e1 + e2 + e3 >= 1 & e4 == 1, l4, 0),
-                r5 = ifelse(e1 + e2 + e3 + e4 >= 1 & e5 == 1, l5, 0)) %>%
-  dplyr::select(tag, dplyr::starts_with("n"), dplyr::starts_with("r")) %>%
-  tidyr::gather(event, loc, -tag) %>%
-  dplyr::filter(loc != 0) %>%
-  dplyr::arrange(tag) %>%
-  dplyr::mutate(class = ifelse(grepl("n", event), "cap", "recap"))
 
-tab4_censor <- 
-  dplyr::group_by(temp_censor, class, loc) %>%
-  dplyr::summarise(n = dplyr::n()) %>%
-  tidyr::spread(class, n) %>%
-  dplyr::mutate(p1 = recap / (cap + recap),
-                p2 = recap / sum(recap),
-                p3 = cap / sum(cap))
-tab4_censor
-chisq.test(tab4_censor[, c("cap", "recap")])
-#####end censor table
+#Recapture rate by location
+tab_loc <- 
+  data.frame(area = 1:3,
+             new = as.vector(table(temp1$cap)),
+             recaps = tab_movearea$total) %>%
+  dplyr::mutate(total = new + recaps,
+                p_recap = recaps / total,
+                p_of_recaps = recaps / sum(recaps),
+                p_of_caps = total / sum(total))
+knitr::kable(tab_loc, 
+             col.names = c("River Section", "New tags", "Recaptures", "Total", "Proportion Recaptured", "Proportion of all Recaptures", "Proportion of all Captures"))
+chisq.test(tab_loc[, c("recaps", "new")])
 
-#movement both up and downstream
-#population home range is likley larger than the sampling footprint
-temp2 <-
-  temp %>%
-  dplyr::mutate(class2 = ifelse(class == "cap", class, event)) %>%
-  dplyr::select(-event, -class) %>%
-  dplyr::group_by(tag) %>%
-  tidyr::spread(class2, loc)
+#Movement table
+rownames(tab_movearea) <- paste0("Captured in ", 1:3)
+knitr::kable(tab_movearea, col.names = c(paste0("Recap in ", 1:3), "Total recaptures", "# out", "Proportion out"))
 
-tab5 <-
-  sapply(1:3, function(x){
+#Movement by fishing hole
+temp2 <- 
+  temp0 %>%
+  dplyr::select(-area) %>%
+  tidyr::spread(recap2, loc)
+tab_moveloc <-
+  lapply(1:16, function(x){
     dat <- temp2[temp2$cap == x, ]
-    table(c(dat$r2, dat$r3, dat$r4, dat$r5, dat$r6))
-  }) %>%
-  as.data.frame() %>%
-  dplyr::mutate(total = V1 + V2 + V3,
-                out = total - diag(matrix(c(V1, V2, V3), 3, 3)),
-                p = out / total)
-tab5
-sum(c(13, 23, 8)) / sum(c(131, 86, 48))
-chisq.test(data.frame(tab5[, c("V1", "V2", "V3")], tab4$cap - tab4$recap))
+    table(factor(c(dat$r2, dat$r3, dat$r4, dat$r5, dat$r6), levels = 1:16))
+  }) %>% 
+  do.call(rbind, .) %>%
+  as.data.frame()
+tab_moveloc$total = apply(tab_moveloc, 1, sum)
+tab_moveloc$out = tab_moveloc$total - diag(as.matrix(tab_moveloc[, 1:16]))
+tab_moveloc$p = tab_moveloc$out / tab_moveloc$total
+rownames(tab_moveloc) <- paste0("Captured in ", 1:16)
+knitr::kable(tab_moveloc, col.names = c(1:16, "Total recaptures", "# out", "Proportion out"))
+
 
 #weak evidence of a trend in recapture rate by length group
 #biggest differences associated with small fish
-tab6 <- 
-  dplyr::group_by(temp, class, lg_group) %>%
-  dplyr::summarise(n = n()) %>%
+tab_lg <-
+  dat_UR18 %>%
+  dplyr::filter(!is.na(lg)) %>%
+  dplyr::mutate(class = ifelse(recap == 0, "cap", "recap"),
+                lg_group = cut(lg, breaks = c(0, 199, 299, 399, 499, 900))) %>% #cut(lg, breaks = c(0, 199, 249, 299, 349, 399, 449, 499, 900))) %>%
+  dplyr::group_by(class, lg_group) %>%
+  dplyr::summarise(n = dplyr::n()) %>%
   tidyr::spread(class, n) %>%
   dplyr::mutate(total = (cap + recap),
                 p1 = recap / total)
-knitr::kable(tab6, col.names = c("Length group (mm)", "New tags", "Recaptures", "Total", "Proportion Recaptured"))
-chisq.test(tab6[, c("cap", "recap")])
+knitr::kable(tab_lg, col.names = c("Length group (mm)", "New tags", "Recaptures", "Total", "Proportion Recaptured"))
+chisq.test(tab_lg[, c("recap", "cap")])
 
 #Size comp changes by week and area
 lg_e <- 
@@ -405,7 +368,7 @@ num <-
                                  (1+ exp(alpha[1] + alpha[event] + beta[1] * lg + beta[event]))),
                 lg_bin = cut(lg, breaks = seq(200, 600, 50), right = FALSE)) %>%
   dplyr::group_by(event, lg_bin) %>%
-  dplyr::summarize(num_p = sum(1 / c_ik), n_ij = n())
+  dplyr::summarize(num_p = sum(1 / c_ik), n_ij = dplyr::n())
 dem <- 
   num %>% 
   dplyr::summarise(dem_p = sum(num_p),

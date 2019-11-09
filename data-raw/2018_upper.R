@@ -154,7 +154,14 @@ dat_recaps <-
   dplyr::mutate(lg = ifelse(!is.na(lg.x) & abs(lg.y - lg.x) >= 12.5, NA, lg.y)) %>%
   dplyr::select(tag, week, loc, recap, lg)
 
-dat_UR18 <- dplyr::bind_rows(dat_mr[!(dat_mr$tag %in% recaps), ], dat_recaps)
+temp <- dplyr::bind_rows(dat_mr[!(dat_mr$tag %in% recaps), ], dat_recaps)
+
+mean_lg <- 
+  dat_UR18[, c("tag", "lg")] %>%
+  dplyr::group_by(tag) %>%
+  dplyr::summarise(lg = as.integer(mean(lg)))
+
+dat_UR18 <- dplyr::left_join(temp [, -which(names(temp) == "lg")], mean_lg, "tag")
 
 LH <-
   dat_UR18 %>%
@@ -175,14 +182,11 @@ CH_UR18 <-
   dplyr::summarise_all(sum) %>%
   dplyr::mutate(ch = paste0(week1, week2, week3, week4, week5, week6)) %>%
   dplyr::select(-dplyr::starts_with("week")) %>%
-  dplyr::left_join(dat_UR18[, c("tag", "lg")] %>%
-                     dplyr::group_by(tag) %>%
-                     dplyr::summarise(lg = as.integer(mean(lg))), 
-                   by = "tag") %>%
+  dplyr::left_join(mean_lg, by = "tag") %>%
   dplyr::left_join(LH, by = "tag")
 
 saveRDS(CH_UR18, file = ".\\data\\CH_UR18.rds")
-
+saveRDS(dat_UR18, file = ".\\data\\dat_UR18.rds")
 
 
 #### look at movement between areas ####
