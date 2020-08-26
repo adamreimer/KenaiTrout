@@ -10,7 +10,7 @@ dat_raw <-
                                    "text", "numeric", rep("text", 3)),
                      skip = 1) %>%
   dplyr::mutate(date = as.Date(as.character(paste0("0", date0)), "%m%d%Y"), 
-                event = factor(format(date, format = "%W"), labels = as.character(1:6)),
+                event = factor(format(date, format = "%W"), labels = as.character(7:12)),
                 nchar0 = nchar(time0),
                 time00 = ifelse(nchar0 == 5, paste0(0, time0), time0),
                 #dt = as.POSIXct(as.POSIXlt(time00, format = "%H%M%S"), tz = "America/Anchorage"),
@@ -136,20 +136,27 @@ del_same_event <-
 dat_raw <- dplyr::anti_join(dat_raw, del_same_event, by = c("tag", "event", "dt", "boat")) #2418 before, 2376 after
 
 
+#prep for merge with 2017 dataset
+load(".\\data\\dat_17.rda")
+dat_17
+dat_18 <- 
+  dat_raw %>%
+    dplyr::mutate(tloss = NA, hook = NA, parasite = NA, temp = NA, tl = NA) %>%
+    dplyr::select(date, rm = loc, fl = lg, tag, sex, mat, ad, tloss, recap, hook, parasite, fate, temp, tl, event)
+dat0 <- rbind(dat_17, dat_18)
+
+
 
 #find and correct tags recorded once but marked as a recap
 recap_nodup <-
-  dat_raw %>%
+  dat0 %>%
   dplyr::group_by(tag) %>%
   dplyr::summarise(n = dplyr::n(), recap = max(recap)) %>%
   dplyr::filter(recap == 1 & n == 1)
-recap_nodup #162 tags marked recap without finding a duplicate
+recap_nodup #39 tags marked recap without finding a duplicate
 #123 of those are 2017 recaps
-load(".\\data\\dat_17.rda")
 in17dat <- intersect(recap_nodup$tag, dat_17$tag)
-dat_raw[dat_raw$tag %in% in17dat, ] %>% print(n = 150)
-dat_raw <- dat_raw[!(dat_raw$tag %in% in17dat), ] # delete these 2376 before, 2253 after
-
+dat0[dat0$tag %in% in17dat, ] %>% print(n = 150)
 
 # nodup_rows <- lapply(lapply(recap_nodup$tag,
 #                             function(x) which(dat_raw$tag == x)),
@@ -163,31 +170,26 @@ dat_raw <- dat_raw[!(dat_raw$tag %in% in17dat), ] # delete these 2376 before, 22
 notin17dat <- setdiff(recap_nodup$tag, dat_17$tag)
 #Duplicate the 38 released records; one for the recap but lost tag, another for the retag.
 #new data rows for fish that lost the tag
-#match format of 2017 dataset
-dat_raw <- 
-  dat_raw %>%
-  dplyr::mutate(tloss = NA, hook = NA, parasite = NA, temp = NA, tl = NA) %>%
-  dplyr::select(date, rm = loc, fl = lg, tag, sex, mat, ad, tloss, recap, hook, parasite, fate, temp, tl, event)
-tloss <- 
-    dat_raw[dat_raw$tag %in% notin17dat, ] %>%
-    dplyr::mutate(tloss = TRUE, tag = NA) %>% 
+(tloss <- 
+    dat0[dat0$tag %in% notin17dat, ] %>%
+    dplyr::mutate(tloss = TRUE, tag = NA)) %>% 
   print(n = 100)
 
-table(dat_raw$tloss, useNA = "always")
-dat_raw$tloss <- ifelse(is.na(dat_raw$tloss), FALSE, dat_raw$tloss) 
-table(dat_raw$tloss, useNA = "always") #Ok
+table(dat0$tloss, useNA = "always")
+dat0$tloss <- ifelse(is.na(dat0$tloss), FALSE, dat0$tloss) 
+table(dat0$tloss) #Ok
 
-table(dat_raw$recap, useNA = "always")
-dat_raw$recap <- ifelse(dat_raw$tag %in% notin17dat, FALSE, dat_raw$recap)
-table(dat_raw$recap, useNA = "always") #ok
+table(dat0$recap, useNA = "always")
+dat0$recap <- ifelse(dat0$tag %in% notin17dat, FALSE, dat0$recap)
+table(dat0$recap, useNA = "always") #ok
 
-dat_raw[dat_raw$tag %in% notin17dat, ] %>% dplyr::arrange(tag) %>% print(n = 100) #OK Look like new captured fish
+dat0[dat0$tag %in% notin17dat, ] %>% dplyr::arrange(tag) %>% print(n = 100) #OK Look like new captured fish
 
 #new datset. Add back in the tag loss fish
-dat <- dplyr::bind_rows(dat_raw, tloss) #2253 before, 2292 after
+dat <- dplyr::bind_rows(dat0, tloss) #4433 before, 4472 after 
 dat[dat$tag %in% notin17dat, ] %>% dplyr::arrange(tag) %>% print(n = 100) #OK
 table(dat$tloss) #ok
-table(dat_raw$recap, useNA = "always") #ok
+table(dat0$recap, useNA = "always") #ok
 
 #no more single recap rows
 dat %>%
@@ -225,8 +227,8 @@ dat_recaps <-
   dplyr::mutate(fl = ifelse(!is.na(fl.x) & abs(fl.y - fl.x) >= 12.5, NA, fl.y)) %>%
   dplyr::select(tag, event, rm, recap, fl, year, week)
 
-dat_18 <- dplyr::bind_rows(dat_mr[!(dat_mr$tag %in% recaps), ], dat_recaps)
-saveRDS(dat_18, ".\\data\\dat_18.rds")
+dat_MR <- dplyr::bind_rows(dat_mr[!(dat_mr$tag %in% recaps), ], dat_recaps)
+saveRDS(dat_MR, ".\\data\\dat_MR.rds")
 
 #non consistent location between years
 # LH <-
@@ -239,19 +241,19 @@ saveRDS(dat_18, ".\\data\\dat_18.rds")
 #   dplyr::mutate(lh = paste0(event1, event2, event3, event4, event5, event6)) %>%
 #   dplyr::select(-dplyr::starts_with("event"))
 
-CH_18 <-
-  dat_18 %>%
+CH_MR <-
+  dat_MR %>%
   dplyr::select(event, tag) %>%
   dplyr::mutate(cap = 1) %>%
   tidyr::spread(event, cap, fill = 0, sep = "") %>%
   dplyr::group_by(tag) %>%
   dplyr::summarise_all(sum) %>%
-  dplyr::mutate(ch = paste0(event1, event2, event3, event4, event5, event6)) %>%
+  dplyr::mutate(ch = paste0(event1, event2, event3, event4, event5, event6, event7, event8, event9, event10, event11, event12)) %>%
   dplyr::select(-dplyr::starts_with("event")) %>%
-  dplyr::left_join(dat_18[, c("tag", "fl")] %>%
+  dplyr::left_join(dat_MR[, c("tag", "fl")] %>%
                      dplyr::group_by(tag) %>%
                      dplyr::summarise(fl = as.integer(mean(fl))),
                    by = "tag") # %>%
 #  dplyr::left_join(LH, by = "tag")
 
-saveRDS(CH_18, ".\\data\\CH_18.rds")
+saveRDS(CH_MR, ".\\data\\CH_MR.rds")
