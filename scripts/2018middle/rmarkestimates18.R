@@ -1,4 +1,93 @@
 CH_18 <- readRDS(".\\data\\CH_18.rds")
+dat_18 <- readRDS(".\\data\\dat_18.rds")
+
+#Look for patterns in recpature rates
+#Capture History table
+tab_ch <-
+  CH_18[CH_18$fl >= 400, "ch"] %>% 
+  tidyr::separate(ch, into = paste0("e", 1:5), sep = 1:4) %>%
+  dplyr::mutate_all(.funs = as.numeric) %>%
+  dplyr::mutate(n1 = e1,
+                n2 = ifelse(e1 == 0, e2, 0),
+                n3 = ifelse(e1 + e2 == 0, e3, 0),
+                n4 = ifelse(e1 + e2 + e3 == 0, e4, 0),
+                n5 = ifelse(e1 + e2 + e3 + e4 == 0, e5, 0),
+                r1 = 0,
+                r2 = ifelse(e1 == 1, e2, 0),
+                r3 = ifelse(e1 + e2 >= 1, e3, 0),
+                r4 = ifelse(e1 + e2 + e3 >= 1, e4, 0),
+                r5 = ifelse(e1 + e2 + e3 + e4 >= 1, e5, 0),
+                a1 = 0,
+                a2 = e1,
+                a3 = e1 + n2,
+                a4 = e1 + n2 + n3,
+                a5 = e1 + n2 + n3 + n4) %>%
+  tidyr::gather(name, count) %>%
+  dplyr::mutate(stat = gsub("^(.)\\d", "\\1", name),
+                event = gsub("^.(\\d)", "\\1", name)) %>%
+  dplyr::group_by(stat, event) %>%
+  dplyr::summarise(count = sum(count, na.rm = TRUE)) %>%
+  tidyr::spread(stat, count) %>%
+  dplyr::select(capture = e, new = n, recap = r, at_large = a) %>%
+  dplyr::mutate(pcap = recap / capture,
+                plarge = recap / at_large) %>%
+  setNames(c("Captured", "New tags", "Recaptures", "At large", "Recaptures / Captures", "Recaptures / At Large"))
+knitr::kable(t(tab_ch), col.names = paste0("Event ", 1:5), digits = 3)
+
+#Evidence of a trend in recapture rate by length group
+#biggest differences associated with small fish
+tab_lg <-
+  dat_18 %>%
+  dplyr::filter(!is.na(fl)) %>%
+  dplyr::mutate(class = ifelse(recap == 0, "cap", "recap"),
+                lg_group = cut(fl, breaks = c(0, 199, 349, 499, 900))) %>% #breaks = c(0, 199, 299, 399, 499, 900))) %>% 
+  dplyr::group_by(class, lg_group) %>%
+  dplyr::summarise(n = dplyr::n()) %>%
+  tidyr::spread(class, n) %>%
+  dplyr::mutate(total = (cap + recap),
+                p1 = recap / total)
+knitr::kable(tab_lg, col.names = c("Length group (mm)", "New tags", "Recaptures", "Total", "Proportion Recaptured"))
+chisq.test(tab_lg[, c("recap", "cap")])
+
+#Temp and Water Level
+dplyr::left_join(readRDS(".\\data\\MRtemp.rds"), readRDS(".\\data\\MRlevel.rds"), "event") %>%
+  dplyr::mutate(year = ifelse(event %in% 1:6, "2017", "2018"),
+                week = ifelse(event %in% 1:6, event, as.numeric(event) - 6)) %>%
+  tidyr::pivot_longer(c("temp", "level")) %>%
+  ggplot(aes(x = week, y = value, color = year)) +
+  geom_line() +
+  facet_grid(name ~ ., scales = "free_y")
+
+#Size distribution by capture method
+ggplot(dat_18, aes(x = fl, fill = recap)) +
+  geom_histogram() +
+  facet_grid(method~.)
+table(dat_18$method, dat_18$recap, useNA = "ifany")
+
+#Look for mixing between capture method
+temp <-
+  dplyr::mutate(dat_18, 
+                recap = ifelse(recap == FALSE, "cap", "recap")) %>% 
+  dplyr::mutate(recap2 = ifelse(recap == "cap", recap, paste0("r", event))) %>%
+  dplyr::select(tag, method, recap2) %>%
+  dplyr::group_by(tag) %>%
+  tidyr::spread(recap2, method)
+tab_gear <-
+  lapply(c("ROD", "NET"), function(x){
+    dat <- temp[temp$cap %in% x, ]
+    table(factor(c(dat$r2, dat$r3, dat$r4, dat$r5, dat$r6), levels = c("ROD", "NET")))
+  }) %>% 
+  do.call(rbind, .) %>%
+  as.data.frame()
+tab_gear$total = apply(tab_gear, 1, sum)
+tab_gear$new = tab_gear$total - diag(as.matrix(tab_gear[, 1:3]))
+tab_gear$p = tab_gear$new / tab_gear$total
+rownames(tab_gear) <- paste0("Captured by ", c("rod", "net"))
+knitr::kable(tab_gear, col.names = c(paste0("Recap by ", c("rod", "net")), "Total recap", "Recap in new gear", "Proportion new"))
+chisq.test(tab_gear[, 1:2])
+
+
+
 
 #add fl, maturity and temperature at capture to CH
 mean(CH_18$fl, na.rm = TRUE)
@@ -16,11 +105,11 @@ CH <- CH_18 %>%
 table(CH$fl_g, CH$recap)
 
 #temperature and water level
-temp <- readRDS(".\\data\\MRtemp.rds") %>% dplyr::filter(event %in% 7:12) %>% dplyr::select(-event)
-temp$time <- 1:6
+temp <- readRDS(".\\data\\MRtemp.rds") %>% dplyr::filter(event %in% 8:12) %>% dplyr::select(-event)
+temp$time <- 1:5
 
-level <- readRDS(".\\data\\MRlevel.rds") %>% dplyr::filter(event %in% 7:12) %>% dplyr::select(-event)
-level$time <- 1:6
+level <- readRDS(".\\data\\MRlevel.rds") %>% dplyr::filter(event %in% 8:12) %>% dplyr::select(-event)
+level$time <- 1:5
 
 
 library(RMark)
@@ -39,26 +128,34 @@ ddl_fl$pent = merge_design.covariates(ddl_fl$pent, temp)
 ddl_fl$Phi = merge_design.covariates(ddl_fl$Phi, level)
 ddl_fl$p = merge_design.covariates(ddl_fl$p, level)
 ddl_fl$pent = merge_design.covariates(ddl_fl$pent, level)
+##from 2018_middle,R (data prep code). crew-hours per event
+ddl_fl$p$e = rep(c(11, 10, 10, 9, 12), 2) #rep(c(36.0, 36.2, 45.7, 37.6, 50.7), 2)
+
 
 rt_models <- function(){
-#  Phi.dot <- list(formula=~1)
-  Phi.fixed <- list(formula=~1, fixed = 1)
-#  Phi.fl <- list(formula=~fl)
-  Phi.level <- list(formula=~level)
-  Phi.fllevel <- list(formula=~fl + level)
+  Phi.dot <- list(formula=~1)
+  Phi.timet <- list(formula=~Time)
+  Phi.fl <- list(formula=~fl)
+  Phi.fltimet <- list(formula=~fl * Time)
+#  Phi.level <- list(formula=~level)
+#  Phi.temp <- list(formula=~temp)
+#  Phi.fllevel <- list(formula=~fl * level)
+#  Phi.fltemp <- list(formula=~fl * temp)
 
-#  p.dot <- list(formula=~1)
+  p.dot <- list(formula=~1)
   p.time <- list(formula=~time)
-#  p.fl <- list(formula=~fl)
-#  p.fllevel <- list(formula=~fl + level)
+  p.e <- list(formula=~e)
+  p.efl <- list(formula=~e * fl)
+  p.timefl <- list(formula=~time * fl)
   
-  pent.dot <- list(formula=~1)
-  pent.fixed <- list(formula=~1, fixed = 0)
-  pent.fl <- list(formula=~fl)
+#  pent.dot <- list(formula=~1)
 #  pent.time <- list(formula=~time)
+  pent.fl <- list(formula=~fl)
+  pent.fltimet <- list(formula=~fl * Time)
 #  pent.temp <- list(formula=~temp)
-  pent.fltemp <- list(formula=~fl + temp)
-  
+#  pent.level <- list(formula=~level)
+  pent.fltemp <- list(formula=~fl * temp)
+  pent.fllevel <- list(formula=~fl * level)
   
   N.fl <- list(formula=~fl)
   
@@ -70,13 +167,27 @@ mod_results <- rt_models()
 mod_results$model.table[, -5]
 
 #drop models w AIC > ~2
-mod_best <- remove.mark(mod_results, as.numeric(rownames(mod_results$model.table))[mod_results$model.table$DeltaAICc > 5])
+mod_best <- remove.mark(mod_results, as.numeric(rownames(mod_results$model.table))[mod_results$model.table$DeltaAICc > 2])
 mod_best$model.table[, -5]
 lapply(rownames(mod_best$model.table), function(x) knitr::kable(mod_best[[as.numeric(x)]]$results$real, digits = 3))
+lapply(rownames(mod_best$model.table), function(x) knitr::kable(mod_best[[as.numeric(x)]]$results$beta, digits = 3))
+
+# Ntime <- 
+#   sapply(rownames(mod_best$model.table)[mod_best$model.table[, "p"] == "~time"], 
+#          function(x) 
+#            mod_best[[as.numeric(x)]]$results$real[grepl("N", rownames(mod_best[[as.numeric(x)]]$results$real)), "estimate"])
+# hist(Ntime[1,])
+# apply(Ntime, 1, mean)
+# Nnotime <- 
+#   sapply(rownames(mod_best$model.table)[mod_best$model.table[, "p"] != "~time"], 
+#          function(x) 
+#            mod_best[[as.numeric(x)]]$results$real[grepl("N", rownames(mod_best[[as.numeric(x)]]$results$real)), "estimate"])
+# hist(Nnotime[1,])
+
 #saveRDS(mod_best, file = ".\\scripts\\mod_best.rds")
 ranks <- data.frame(rank = row(mod_best$model.table)[, 1], 
                     mod_n = rownames(mod_best$model.table),
-                    mod_name = gsub("(.*)pent.*", "\\1", mod_best$model.table[, "model"]), 
+                    mod_name = mod_best$model.table[, "model"], #gsub("(.*)pent.*", "\\1", mod_best$model.table[, "model"]),
                     weight = mod_best$model.table$weight)
 
 ave_Phi <- 
@@ -172,11 +283,44 @@ lapply(rownames(mod_best$model.table), function(x){
   dplyr::mutate(rank = ranks$rank[ranks$mod_n == mod_n],
                 model = factor(rank,
                                levels = 0:dim(ranks)[1],
-                               labels = c("Model average", as.character(ranks$mod_name)))) %>%
-  ggplot(aes(x = mod_n, y = estimate, ymin = lcl, ymax = ucl, color = model)) +
+                               labels = c("Model average", as.character(ranks$mod_name))),
+                model2 = ifelse(grepl("p\\(~time.*", ranks$mod_name[ranks$mod_n == mod_n]), "time", "no time"))  %>%
+  ggplot(aes(x = rank, y = estimate, ymin = lcl, ymax = ucl, color = model)) +
     geom_crossbar(width = 0.5) +
     geom_line(data = ave_N, aes(x = mod_n, y = estimate), size = 1.25, inherit.aes = FALSE) +
     geom_ribbon(data = ave_N, aes(x = mod_n, ymin = lcl, ymax = ucl), size = 1.25, alpha = 0.2, inherit.aes = FALSE) +
     facet_grid(.~group) +
-    labs(title = "Abundance", x = "model", y = "N")
+    labs(title = "Abundance", x = "model rank", y = "N")
+
+#N per time strata
+est_Nt <- 
+  lapply(rownames(mod_best$model.table), function(x){
+    mod_best[[as.numeric(x)]]$results$derived$`N Population Size` %>%
+      dplyr::mutate(model = mod_best$model.table[x, "model"], #gsub("(.*)pent.*", "\\1", mod_best$model.table[x, "model"]),
+                    group = rep(c("small", "large"), each = 5), #dim(mod_best[[as.numeric(x)]]$results$derived$`N Population Size`)[1]/2),
+                    time = rep(1:5, 2)) %>%
+      dplyr::select(model, group, time, estimate, se)}) %>%
+  do.call(rbind, .)
+
+aveNt <- function(group, time){
+  est <- est_Nt[est_Nt$group == group & est_Nt$time == time, ]
+  model.average(
+      list(estimate = est[, "estimate"], 
+           weight = mod_best$model.table$weight, 
+           se = est[, "se"]), 
+      mata = TRUE)}
+temp <- cbind(sapply(1:5, function(x) aveNt("small", x)), sapply(1:5, function(x) aveNt("large", x)))
+plot_aveNt <- data.frame(
+  model = "Model average",
+  group = rep(c("small", "large"), each = 5), 
+  time = rep(1:5, times = 2),
+  estimate = unlist(temp[rownames(temp) == "estimate", ]),
+  lcl = unlist(temp[rownames(temp) == "lcl", ]),
+  ucl = unlist(temp[rownames(temp) == "ucl", ])
+)
+ggplot(est_Nt, aes(x = time, y = estimate, color = model)) +
+    geom_line() +
+    geom_line(data = plot_aveNt, aes(x = time, y = estimate), size = 1.25) +
+    geom_ribbon(data = plot_aveNt, aes(x = time, ymin = lcl, ymax = ucl), size = 1.25, alpha = 0.2, inherit.aes = FALSE) +
+    facet_grid(. ~ group)
 
