@@ -50,6 +50,8 @@ ddl_fl$p$year = 0
 ddl_fl$p$year[ddl_fl$p$Time >= 5] = 1 
 ddl_fl$Phi$year = 0
 ddl_fl$Phi$year[ddl_fl$Phi$Time >= 5] = 1
+ddl_fl$pent$year = 0
+ddl_fl$pent$year[ddl_fl$pent$Time > 5] = 1
 # ddl_fl$p$year = 0
 # ddl_fl$p$year[ddl_fl$p$Time >= 1] = 1 
 # ddl_fl$Phi$year = 0
@@ -73,54 +75,59 @@ ddl_fl$pent$week[ddl_fl$pent$time %in% c(3, 55)] = "3"
 ddl_fl$pent$week[ddl_fl$pent$time %in% c(4, 56)] = "4"
 ddl_fl$pent$week[ddl_fl$pent$time %in% c(5, 57)] = "5"
 ddl_fl$pent$week[ddl_fl$pent$time %in% c(6, 58)] = "6"
-# ddl_fl$Phi$week[ddl_fl$Phi$time %in% c(1, 2)] = "1"
-# ddl_fl$Phi$week[ddl_fl$Phi$time %in% c(1.02, 2.02)] = "2"
-# ddl_fl$Phi$week[ddl_fl$Phi$time %in% c(1.04, 2.04)] = "3"
-# ddl_fl$Phi$week[ddl_fl$Phi$time %in% c(1.06, 2.06)] = "4"
-# ddl_fl$Phi$week[ddl_fl$Phi$time %in% c(1.08, 2.08)] = "5"
-# ddl_fl$Phi$week[ddl_fl$Phi$time %in% c(1.1)] = "6"
-# ddl_fl$p$week[ddl_fl$p$time %in% c(1, 2)] = "1"
-# ddl_fl$p$week[ddl_fl$p$time %in% c(1.02, 2.02)] = "2"
-# ddl_fl$p$week[ddl_fl$p$time %in% c(1.04, 2.04)] = "3"
-# ddl_fl$p$week[ddl_fl$p$time %in% c(1.06, 2.06)] = "4"
-# ddl_fl$p$week[ddl_fl$p$time %in% c(1.08, 2.08)] = "5"
-# ddl_fl$p$week[ddl_fl$p$time %in% c(1.1, 2.1)] = "6"
-# ddl_fl$pent$week[ddl_fl$pent$time %in% c(1, 2)] = "1"
-# ddl_fl$pent$week[ddl_fl$pent$time %in% c(1.02, 2.02)] = "2"
-# ddl_fl$pent$week[ddl_fl$pent$time %in% c(1.04, 2.04)] = "3"
-# ddl_fl$pent$week[ddl_fl$pent$time %in% c(1.06, 2.06)] = "4"
-# ddl_fl$pent$week[ddl_fl$pent$time %in% c(1.08, 2.08)] = "5"
-# ddl_fl$pent$week[ddl_fl$pent$time %in% c(1.10, 2.10)] = "6"
+ddl_fl$Phi$Week[ddl_fl$Phi$time %in% c(1, 53)] = 1
+ddl_fl$Phi$Week[ddl_fl$Phi$time %in% c(2, 54)] = 2
+ddl_fl$Phi$Week[ddl_fl$Phi$time %in% c(3, 55)] = 3
+ddl_fl$Phi$Week[ddl_fl$Phi$time %in% c(4, 56)] = 4
+ddl_fl$Phi$Week[ddl_fl$Phi$time %in% c(5, 57)] = 5
+ddl_fl$Phi$Week[ddl_fl$Phi$time %in% c(6)] = 6
+ddl_fl$p$Week[ddl_fl$p$time %in% c(1, 53)] = 1
+ddl_fl$p$Week[ddl_fl$p$time %in% c(2, 54)] = 2
+ddl_fl$p$Week[ddl_fl$p$time %in% c(3, 55)] = 3
+ddl_fl$p$Week[ddl_fl$p$time %in% c(4, 56)] = 4
+ddl_fl$p$Week[ddl_fl$p$time %in% c(5, 57)] = 5
+ddl_fl$p$Week[ddl_fl$p$time %in% c(6, 58)] = 6
+ddl_fl$pent$Week[ddl_fl$pent$time %in% c(1, 53)] = 1
+ddl_fl$pent$Week[ddl_fl$pent$time %in% c(2, 54)] = 2
+ddl_fl$pent$Week[ddl_fl$pent$time %in% c(3, 55)] = 3
+ddl_fl$pent$Week[ddl_fl$pent$time %in% c(4, 56)] = 4
+ddl_fl$pent$Week[ddl_fl$pent$time %in% c(5, 57)] = 5
+ddl_fl$pent$Week[ddl_fl$pent$time %in% c(6, 58)] = 6
+#effort
+ddl_fl$p$e <- rep(c(8, 8, 8, 8, 8, 8, 2, 9, 10, 10, 8, 10), 2)
 
 
 rt_models <- function(){
-#  Phi.dot <- list(formula=~1)
+  Phi.dot <- list(formula=~1)
   Phi.fl <- list(formula=~fl)
+  Phi.time <- list(formula=~time)
 #  Phi.year <- list(formula=~year)
 #  Phi.yearfl <- list(formula=~year + fl)
   Phi.season <- list(formula=~season)
-  Phi.flseason <- list(formula=~fl * season)
-  Phi.flseawk <- list(formula=~fl * season * week)
+#  Phi.flseason <- list(formula=~fl * season)
+#  Phi.flseawk <- list(formula=~fl * season * week)
   
 
 #  p.dot <- list(formula=~1)
-#  p.fltime <- list(formula=~fl * time)
+  p.time <- list(formula=~time)
 #  p.year <- list(formula=~year)
-#  p.week <- list(formula=~week)
+  p.week <- list(formula=~week)
 #  p.fl <- list(formula=~fl)
 #  p.level <- list(formula=~level)
-  p.fllevel <- list(formula=~fl * level)
-  p.flyear <- list(formula=~year * fl)
-  p.weekfl <- list(formula=~week * fl)
-  p.weekyearfl <- list(formula=~week + year + fl)
+  p.e <- list(formula=~e)
+  p.efl <- list(formula=~e * fl)
+  p.efly <- list(formula=~e * fl * year)
+#  p.weekfl <- list(formula=~week * fl)
   
 #  pent.dot <- list(formula=~1)
 #  pent.fl <- list(formula=~fl)
-#  pent.time <- list(formula=~time)
-  pent.temp <- list(formula=~temp)
-  pent.fltemp <- list(formula=~fl * temp)
-  pent.week <- list(formula=~week)
-  pent.flweek <- list(formula=~fl + week)
+  pent.time <- list(formula=~time)
+#  pent.temp <- list(formula=~temp)
+#  pent.flweek <- list(formula=~fl * week)
+#  pent.week <- list(formula=~week)
+  pent.flwy <- list(formula=~fl * week * year)
+  pent.flWy <- list(formula=~fl * Week * year)
+  
   
   N.fl <- list(formula=~fl)
   
@@ -132,7 +139,7 @@ mod_results <- rt_models()
 mod_results$model.table[, -5]
 
 #drop models w AIC > ~2
-mod_best <- remove.mark(mod_results, as.numeric(rownames(mod_results$model.table))[mod_results$model.table$DeltaAICc > 5])
+mod_best <- remove.mark(mod_results, as.numeric(rownames(mod_results$model.table))[mod_results$model.table$DeltaAICc > 2])
 mod_best$model.table[, -c(1, 2, 3, 4)]
 lapply(rownames(mod_best$model.table), function(x) knitr::kable(mod_best[[as.numeric(x)]]$results$real, digits = 3))
 lapply(rownames(mod_best$model.table), function(x) knitr::kable(mod_best[[as.numeric(x)]]$results$beta, digits = 3))
@@ -153,7 +160,7 @@ ave_Phi <-
   dplyr::mutate(model = factor(0, levels = 0:dim(ranks)[1], labels = c("Model average", as.character(ranks$mod_name)))) 
 
 ave_p <- 
-  model.average(mod_best, "p", drop = FALSE)[[1]] %>%
+  model.average(mod_best, "p", vcv = TRUE, drop = FALSE)[[1]] %>%
   dplyr::select(estimate, lcl, ucl , group, time) %>%
   dplyr::mutate(model = "Model average")
 
@@ -244,4 +251,36 @@ lapply(rownames(mod_best$model.table), function(x){
     geom_ribbon(data = ave_N, aes(x = mod_n, ymin = lcl, ymax = ucl), size = 1.25, alpha = 0.2, inherit.aes = FALSE) +
     facet_grid(.~group) +
     labs(title = "Abundance", x = "model", y = "N")
+
+#N per time strata
+est_Nt <- 
+  lapply(rownames(mod_best$model.table), function(x){
+    mod_best[[as.numeric(x)]]$results$derived$`N Population Size` %>%
+      dplyr::mutate(model = mod_best$model.table[x, "model"], #gsub("(.*)pent.*", "\\1", mod_best$model.table[x, "model"]),
+                    group = rep(c(rep("small", 6), rep("large", 6)), each = 2), #dim(mod_best[[as.numeric(x)]]$results$derived$`N Population Size`)[1]/2),
+                    time = rep(1:12, 2)) %>%
+      dplyr::select(model, group, time, estimate, se)}) %>%
+  do.call(rbind, .)
+
+aveNt <- function(group, time){
+  est <- est_Nt[est_Nt$group == group & est_Nt$time == time, ]
+  model.average(
+    list(estimate = est[, "estimate"], 
+         weight = mod_best$model.table$weight, 
+         se = est[, "se"]), 
+    mata = TRUE)}
+temp <- cbind(sapply(1:12, function(x) aveNt("small", x)), sapply(1:12, function(x) aveNt("large", x)))
+plot_aveNt <- data.frame(
+  model = "Model average",
+  group = rep(c("small", "large"), each = 12), 
+  time = rep(1:12, times = 2),
+  estimate = unlist(temp[rownames(temp) == "estimate", ]),
+  lcl = unlist(temp[rownames(temp) == "lcl", ]),
+  ucl = unlist(temp[rownames(temp) == "ucl", ])
+)
+ggplot(est_Nt, aes(x = time, y = estimate, color = model)) +
+  geom_line() +
+  geom_line(data = plot_aveNt, aes(x = time, y = estimate), size = 1.25) +
+  geom_ribbon(data = plot_aveNt, aes(x = time, ymin = lcl, ymax = ucl), size = 1.25, alpha = 0.2, inherit.aes = FALSE) +
+  facet_grid(. ~ group)
 

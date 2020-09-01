@@ -31,22 +31,27 @@ sum(dup_id) #0 duplicate rows
 #Note get effort data here
 e_time <- 
   dplyr::left_join(aggregate(dt ~ date + crew, dat_raw, max), 
-                 aggregate(dt ~ date + crew, dat_raw, min), by = c("date", "crew")) %>% 
-  dplyr::mutate(diff = dt.x - dt.y)
+                 aggregate(dt ~ date + crew, dat_raw, min),
+                 by = c("date", "crew")) %>% 
+  dplyr::left_join(aggregate(method ~ date + crew, dat_raw, unique),
+                   by = c("date", "crew")) %>% 
+  dplyr::mutate(diff = difftime(dt.x, dt.y, units = "hours"))
 e_time$event <- factor(format(e_time$date, format = "%W"), labels = as.character(1:6))
-e_time$event <- ifelse(e_time$event == 1 , 2, e_time$event)
+#e_time$event <- ifelse(e_time$event == 1 , 2, e_time$event)
 aggregate(diff ~ event, data = e_time, sum)
+table(dat_raw$method, dat_raw$crew, dat_raw$date)[, , 10:25]
+aggregate(crew ~ date, dat_raw, unique)
 
 dat_raw
 #Check each variable and correct as needed
-table(dat_raw$date, dat_raw$event, useNA = "ifany") #first event too short, unequal p, merge w second
-  dat_raw$event <- ifelse(dat_raw$date == "2018-05-04", 2, dat_raw$event)
+table(dat_raw$date, dat_raw$event, useNA = "ifany") #first event too short use an effort covariate
+  #dat_raw$event <- ifelse(dat_raw$date == "2018-05-04", 2, dat_raw$event)
   table(dat_raw$date, dat_raw$event, useNA = "ifany") #first event too short, merge w second
 table(dat_raw$boat, useNA = "ifany")
 table(dat_raw$crew, useNA = "ifany") # Note effort changes between events
   effort0 <- aggregate(crew ~ date, data = dat_raw, unique)
   effort0$event <- factor(format(effort0$date, format = "%W"), labels = as.character(1:6))
-  effort0$event <- ifelse(effort0$event == 1 , 2, effort0$event)
+#  effort0$event <- ifelse(effort0$event == 1 , 2, effort0$event)
   effort0$effort <- sapply(effort0$crew, function(x) length(strsplit(x, " ")))
   aggregate(effort ~ event, data = effort0, sum)
 
@@ -262,7 +267,7 @@ CH_18 <-
   tidyr::spread(event, cap, fill = 0, sep = "") %>%
   dplyr::group_by(tag) %>%
   dplyr::summarise_all(sum) %>%
-  dplyr::mutate(ch = paste0(event2, event3, event4, event5, event6)) %>%
+  dplyr::mutate(ch = paste0(event1, event2, event3, event4, event5, event6)) %>%
   dplyr::select(-dplyr::starts_with("event")) %>%
   dplyr::left_join(dat_18[, c("tag", "fl")] %>%
                      dplyr::group_by(tag) %>%
@@ -271,3 +276,4 @@ CH_18 <-
 #  dplyr::left_join(LH, by = "tag")
 
 saveRDS(CH_18, ".\\data\\CH_18.rds")
+

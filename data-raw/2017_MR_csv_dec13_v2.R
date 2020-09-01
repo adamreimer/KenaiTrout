@@ -1,6 +1,6 @@
 library(magrittr)
 
-rawdat <- readr::read_csv(".\\data\\Trout2017_MIDDLE RIVER_dec13.csv",
+rawdat <- readr::read_csv(".\\data-raw\\Trout2017_MIDDLE RIVER_dec13.csv",
                           col_names = c("date", "rm", "fl", "tag", "sex", "mat", "ad", "tloss", "recap", "hook", "parasite", "fate", "temp", "tl"),
                           col_types = c("ciiciiiiiiiini"))
 rawdat

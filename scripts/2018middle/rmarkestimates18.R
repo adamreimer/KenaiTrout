@@ -105,11 +105,11 @@ CH <- CH_18 %>%
 table(CH$fl_g, CH$recap)
 
 #temperature and water level
-temp <- readRDS(".\\data\\MRtemp.rds") %>% dplyr::filter(event %in% 8:12) %>% dplyr::select(-event)
-temp$time <- 1:5
+temp <- readRDS(".\\data\\MRtemp.rds") %>% dplyr::filter(event %in% 7:12) %>% dplyr::select(-event)
+temp$time <- 1:6
 
-level <- readRDS(".\\data\\MRlevel.rds") %>% dplyr::filter(event %in% 8:12) %>% dplyr::select(-event)
-level$time <- 1:5
+level <- readRDS(".\\data\\MRlevel.rds") %>% dplyr::filter(event %in% 7:12) %>% dplyr::select(-event)
+level$time <- 1:6
 
 
 library(RMark)
@@ -128,34 +128,35 @@ ddl_fl$pent = merge_design.covariates(ddl_fl$pent, temp)
 ddl_fl$Phi = merge_design.covariates(ddl_fl$Phi, level)
 ddl_fl$p = merge_design.covariates(ddl_fl$p, level)
 ddl_fl$pent = merge_design.covariates(ddl_fl$pent, level)
-##from 2018_middle,R (data prep code). crew-hours per event
-ddl_fl$p$e = rep(c(11, 10, 10, 9, 12), 2) #rep(c(36.0, 36.2, 45.7, 37.6, 50.7), 2)
+##from 2018_middle,R (data prep code). 
+#Crews per event captures most of variation plus catchability per crew hour likely differs from net of rod and reel crews
+ddl_fl$p$e =  rep(c(2, 9, 10, 10, 8, 10), 2) #rep(c(8.2, 48.1, 60.1, 55.1, 44.7, 64.4), 2) #rep(c(2, 9, 10, 10, 9, 12), 2) #
 
 
 rt_models <- function(){
   Phi.dot <- list(formula=~1)
-  Phi.timet <- list(formula=~Time)
+#  Phi.timet <- list(formula=~Time)
   Phi.fl <- list(formula=~fl)
-  Phi.fltimet <- list(formula=~fl * Time)
+#  Phi.fltimet <- list(formula=~fl * Time)
 #  Phi.level <- list(formula=~level)
 #  Phi.temp <- list(formula=~temp)
 #  Phi.fllevel <- list(formula=~fl * level)
 #  Phi.fltemp <- list(formula=~fl * temp)
 
-  p.dot <- list(formula=~1)
+#  p.dot <- list(formula=~1)
   p.time <- list(formula=~time)
   p.e <- list(formula=~e)
   p.efl <- list(formula=~e * fl)
   p.timefl <- list(formula=~time * fl)
   
 #  pent.dot <- list(formula=~1)
-#  pent.time <- list(formula=~time)
+  pent.time <- list(formula=~time)
   pent.fl <- list(formula=~fl)
   pent.fltimet <- list(formula=~fl * Time)
-#  pent.temp <- list(formula=~temp)
+  pent.temp <- list(formula=~temp)
 #  pent.level <- list(formula=~level)
   pent.fltemp <- list(formula=~fl * temp)
-  pent.fllevel <- list(formula=~fl * level)
+#  pent.fllevel <- list(formula=~fl * level)
   
   N.fl <- list(formula=~fl)
   
@@ -167,7 +168,7 @@ mod_results <- rt_models()
 mod_results$model.table[, -5]
 
 #drop models w AIC > ~2
-mod_best <- remove.mark(mod_results, as.numeric(rownames(mod_results$model.table))[mod_results$model.table$DeltaAICc > 2])
+mod_best <- remove.mark(mod_results, as.numeric(rownames(mod_results$model.table))[mod_results$model.table$DeltaAICc > 5])
 mod_best$model.table[, -5]
 lapply(rownames(mod_best$model.table), function(x) knitr::kable(mod_best[[as.numeric(x)]]$results$real, digits = 3))
 lapply(rownames(mod_best$model.table), function(x) knitr::kable(mod_best[[as.numeric(x)]]$results$beta, digits = 3))
@@ -252,7 +253,7 @@ data.frame(model = "Model average",
 # #manual calculation
 # sum(est_Phi[est_Phi$group =="small" & est_Phi$time == "5", "estimate"] * mod_best$model.table$weight)
 library(ggplot2)
-plot_params <- function(param, ave, label){
+plot_params <- function(param, ave, label, ylim = NULL){
   lapply(rownames(mod_best$model.table), function(x){
     get.real(mod_best[[as.numeric(x)]], param, se = TRUE) %>%
       dplyr::mutate(mod_n = x) %>%
@@ -267,11 +268,12 @@ plot_params <- function(param, ave, label){
     geom_line() +
     geom_line(data = ave, size = 1.25) +
     geom_ribbon(data = ave, aes(x = as.numeric(time), ymin = lcl, ymax = ucl), size = 1.25, alpha = 0.2, inherit.aes = FALSE) +
+    scale_y_continuous(limits = ylim) +
     facet_grid(.~group) +
     labs(title = paste0(label, " by length group"), x = "week", y = label)
 }
 plot_params("Phi", ave_Phi, "Apparent Survival")
-plot_params("p", ave_p, "Probability of Capture")
+plot_params("p", ave_p, "Probability of Capture", ylim = c(0, .15))
 plot_params("pent", ave_pent, "Probability of entrance") 
 
 lapply(rownames(mod_best$model.table), function(x){
@@ -297,8 +299,8 @@ est_Nt <-
   lapply(rownames(mod_best$model.table), function(x){
     mod_best[[as.numeric(x)]]$results$derived$`N Population Size` %>%
       dplyr::mutate(model = mod_best$model.table[x, "model"], #gsub("(.*)pent.*", "\\1", mod_best$model.table[x, "model"]),
-                    group = rep(c("small", "large"), each = 5), #dim(mod_best[[as.numeric(x)]]$results$derived$`N Population Size`)[1]/2),
-                    time = rep(1:5, 2)) %>%
+                    group = rep(c("small", "large"), each = 6), #dim(mod_best[[as.numeric(x)]]$results$derived$`N Population Size`)[1]/2),
+                    time = rep(1:6, 2)) %>%
       dplyr::select(model, group, time, estimate, se)}) %>%
   do.call(rbind, .)
 
@@ -309,11 +311,11 @@ aveNt <- function(group, time){
            weight = mod_best$model.table$weight, 
            se = est[, "se"]), 
       mata = TRUE)}
-temp <- cbind(sapply(1:5, function(x) aveNt("small", x)), sapply(1:5, function(x) aveNt("large", x)))
+temp <- cbind(sapply(1:6, function(x) aveNt("small", x)), sapply(1:6, function(x) aveNt("large", x)))
 plot_aveNt <- data.frame(
   model = "Model average",
-  group = rep(c("small", "large"), each = 5), 
-  time = rep(1:5, times = 2),
+  group = rep(c("small", "large"), each = 6), 
+  time = rep(1:6, times = 2),
   estimate = unlist(temp[rownames(temp) == "estimate", ]),
   lcl = unlist(temp[rownames(temp) == "lcl", ]),
   ucl = unlist(temp[rownames(temp) == "ucl", ])
