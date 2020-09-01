@@ -139,11 +139,13 @@ mod_results <- rt_models()
 mod_results$model.table[, -5]
 
 #drop models w AIC > ~2
-mod_best <- remove.mark(mod_results, as.numeric(rownames(mod_results$model.table))[mod_results$model.table$DeltaAICc > 2])
+mod_best <- remove.mark(mod_results, as.numeric(rownames(mod_results$model.table))[mod_results$model.table$DeltaAICc > 10])
 mod_best$model.table[, -c(1, 2, 3, 4)]
 lapply(rownames(mod_best$model.table), function(x) knitr::kable(mod_best[[as.numeric(x)]]$results$real, digits = 3))
 lapply(rownames(mod_best$model.table), function(x) knitr::kable(mod_best[[as.numeric(x)]]$results$beta, digits = 3))
 lapply(rownames(mod_best$model.table), function(x) mod_best[[as.numeric(x)]]$results$derived)
+#saveRDS(mod_best, file = ".\\scripts\\2018middle\\mod_bestMR17-18both.rds")
+
 
 #saveRDS(mod_best, file = ".\\scripts\\mod_best.rds")
 ranks <- data.frame(rank = row(mod_best$model.table)[, 1], 

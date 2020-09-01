@@ -21,7 +21,7 @@ rawdat[rawdat$tag == 0, ] %>% print(n = 100)
 dup_norecap <-
   rawdat[rawdat$tag != 0, ] %>%
   dplyr::group_by(tag) %>%
-  dplyr::summarise(n = n(), recap = max(recap), fl_range = range(fl)[2] - range(fl)[1]) %>%
+  dplyr::summarise(n = dplyr::n(), recap = max(recap), fl_range = range(fl)[2] - range(fl)[1]) %>%
   dplyr::filter(recap == 0 & n > 1)
 dup_norecap # 0 duplicate entries without a recap flag
 dup_rows <- lapply(lapply(dup_norecap$tag, function(x) which(rawdat$tag == x)), function(x) list(first = c((x[1]-4):(x[1]+4)), second = c((x[2]-4):(x[2]+4))))
@@ -32,7 +32,7 @@ dup_dat
 recap_nodup <-
   rawdat[rawdat$tag != 0, ] %>%
   dplyr::group_by(tag) %>%
-  dplyr::summarise(n = n(), recap = max(recap)) %>%
+  dplyr::summarise(n = dplyr::n(), recap = max(recap)) %>%
   dplyr::filter(recap == 1 & n == 1)
 recap_nodup # 2 marked as recap with no duplicate record (tag lost but adclipped, retagged)
 nodup_rows <- lapply(lapply(recap_nodup$tag, function(x) which(rawdat$tag == x)), function(x) list(first = c((x[1]-4):(x[1]+4))))
@@ -96,7 +96,7 @@ dat_mr[dat_mr$tag %in% recaps, c(1, 3:6, 10:11, 14:15)] %>%
                    hook = as.logical(ifelse(is.na(dplyr::last(hook)), max(hook, na.rm = TRUE), dplyr::last(hook))),
                    parasite = as.logical(ifelse(is.na(dplyr::last(parasite)), max(parasite, na.rm = TRUE), dplyr::last(parasite))))
 
-data.frame(fl_range = fill$fl_range) %>% dplyr::group_by(fl_range) %>% dplyr::summarise(num = n())
+data.frame(fl_range = fill$fl_range) %>% dplyr::group_by(fl_range) %>% dplyr::summarise(num = dplyr::n())
 fill[fill$fl_range %in% c(31, 126, 129), ]
 
 dat_recaps <-
@@ -110,8 +110,7 @@ dat_recaps <-
   dplyr::distinct(tag, event, .keep_all = TRUE)
 
 dat17 <- dplyr::bind_rows(dat_mr[!(dat_mr$tag %in% recaps), ], dat_recaps)
-#saveRDS(dat17, ".\\data\\dat_17")
-devtools::use_data(dat_17, pkg = ".\\KenaiTrout", overwrite = TRUE)
+saveRDS(dat17, ".\\data\\dat_17.rds")
 
 CH <- dat17 %>%
   dplyr::mutate(cap = 1) %>%
@@ -119,9 +118,12 @@ CH <- dat17 %>%
   dplyr::select(tag, event, cap) %>%
   tidyr::spread(event, cap, fill = 0, sep = "") %>%
   dplyr::mutate(ch = paste0(event1, event2, event3, event4, event5, event6)) %>%
-  dplyr::select(-dplyr::starts_with("event"))
-#saveRDS(CH, ".\\data\\CH_17")
-devtools::use_data(CH_17, pkg = ".\\KenaiTrout", overwrite = TRUE)
+  dplyr::select(-dplyr::starts_with("event")) %>%
+  dplyr::left_join(dat17[, c("tag", "fl")] %>%
+                     dplyr::group_by(tag) %>%
+                     dplyr::summarise(fl = as.integer(mean(fl))),
+                   by = "tag")
+saveRDS(CH, ".\\data\\CH_17.rds")
 
 CH_ms <- dat17 %>%
   dplyr::mutate(cap = plyr::mapvalues(rm, from = c(45, 46, 47), to = c("A", "B", "C"))) %>%
