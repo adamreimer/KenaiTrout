@@ -28,12 +28,33 @@ dat_raw <-
 dup_id <- duplicated(dat_raw) 
 sum(dup_id) #0 duplicate rows
 
+#Note get effort data here
+e_time <- 
+  dplyr::left_join(aggregate(dt ~ date + crew, dat_raw, max), 
+                 aggregate(dt ~ date + crew, dat_raw, min),
+                 by = c("date", "crew")) %>% 
+  dplyr::left_join(aggregate(method ~ date + crew, dat_raw, unique),
+                   by = c("date", "crew")) %>% 
+  dplyr::mutate(diff = difftime(dt.x, dt.y, units = "hours"))
+e_time$event <- factor(format(e_time$date, format = "%W"), labels = as.character(1:6))
+#e_time$event <- ifelse(e_time$event == 1 , 2, e_time$event)
+aggregate(diff ~ event, data = e_time, sum)
+table(dat_raw$method, dat_raw$crew, dat_raw$date)[, , 10:25]
+aggregate(crew ~ date, dat_raw, unique)
 
 dat_raw
 #Check each variable and correct as needed
-table(dat_raw$date, dat_raw$event, useNA = "ifany")
+table(dat_raw$date, dat_raw$event, useNA = "ifany") #first event too short use an effort covariate
+  #dat_raw$event <- ifelse(dat_raw$date == "2018-05-04", 2, dat_raw$event)
+  table(dat_raw$date, dat_raw$event, useNA = "ifany") #first event too short, merge w second
 table(dat_raw$boat, useNA = "ifany")
-table(dat_raw$crew, useNA = "ifany")
+table(dat_raw$crew, useNA = "ifany") # Note effort changes between events
+  effort0 <- aggregate(crew ~ date, data = dat_raw, unique)
+  effort0$event <- factor(format(effort0$date, format = "%W"), labels = as.character(1:6))
+#  effort0$event <- ifelse(effort0$event == 1 , 2, effort0$event)
+  effort0$effort <- sapply(effort0$crew, function(x) length(strsplit(x, " ")))
+  aggregate(effort ~ event, data = effort0, sum)
+
 table(dat_raw$method, useNA = "ifany")
 table(is.na(dat_raw$dt))
   hist(as.numeric(format(dat_raw$dt, format = "%H")), main = "hour") #lots of bad times!
@@ -125,7 +146,7 @@ same_event <-
   dplyr::summarise(recap = max(recap), num = dplyr::n()) %>%
   dplyr::filter(recap == 1 & num > 1)
 print(same_event, n = 50)
-sum(same_event$num - 1) #42 duplicate rows
+sum(same_event$num - 1) #45 duplicate rows
 
 del_same_event <- 
   dat_raw[dat_raw$tag %in% same_event$tag, ] %>% 
@@ -143,12 +164,12 @@ recap_nodup <-
   dplyr::group_by(tag) %>%
   dplyr::summarise(n = dplyr::n(), recap = max(recap)) %>%
   dplyr::filter(recap == 1 & n == 1)
-recap_nodup #162 tags marked recap without finding a duplicate
-#123 of those are 2017 recaps
+recap_nodup #163 tags marked recap without finding a duplicate
+#124 of those are 2017 recaps
 load(".\\data\\dat_17.rda")
 in17dat <- intersect(recap_nodup$tag, dat_17$tag)
 dat_raw[dat_raw$tag %in% in17dat, ] %>% print(n = 150)
-dat_raw <- dat_raw[!(dat_raw$tag %in% in17dat), ] # delete these 2376 before, 2253 after
+dat_raw <- dat_raw[!(dat_raw$tag %in% in17dat), ] # delete these 2373 before, 2249 after
 
 
 # nodup_rows <- lapply(lapply(recap_nodup$tag,
@@ -167,7 +188,7 @@ notin17dat <- setdiff(recap_nodup$tag, dat_17$tag)
 dat_raw <- 
   dat_raw %>%
   dplyr::mutate(tloss = NA, hook = NA, parasite = NA, temp = NA, tl = NA) %>%
-  dplyr::select(date, rm = loc, fl = lg, tag, sex, mat, ad, tloss, recap, hook, parasite, fate, temp, tl, event)
+  dplyr::select(date, rm = loc, fl = lg, tag, sex, mat, ad, tloss, recap, hook, parasite, fate, temp, tl, event, method)
 tloss <- 
     dat_raw[dat_raw$tag %in% notin17dat, ] %>%
     dplyr::mutate(tloss = TRUE, tag = NA) %>% 
@@ -203,7 +224,7 @@ dat[is.na(dat$tag) | (dat$fate %in% "censor" & dat$recap == FALSE), ] %>% print(
 dat_mr <- dat[!(is.na(dat$tag) | (dat$fate %in% "censor" & dat$recap == FALSE)), ] %>% 
   dplyr::mutate(week = format(date, "%W"),
                 year = format(date, "%Y")) %>%
-  dplyr::select(tag, event, rm, recap, fl, year, week)
+  dplyr::select(tag, event, method, rm, recap, fl, year, week)
 
 recaps <- unique(dat_mr$tag[dat_mr$recap %in% TRUE])
 recap_list <- lapply(recaps, function(x) dat_mr[dat_mr$tag == x, ])
@@ -223,7 +244,7 @@ dat_recaps <-
   dplyr::left_join(dat_mr[dat_mr$tag %in% recaps, ], fill, by = "tag") %>%
   dplyr::arrange(tag, event) %>%
   dplyr::mutate(fl = ifelse(!is.na(fl.x) & abs(fl.y - fl.x) >= 12.5, NA, fl.y)) %>%
-  dplyr::select(tag, event, rm, recap, fl, year, week)
+  dplyr::select(tag, event, method, rm, recap, fl, year, week)
 
 dat_18 <- dplyr::bind_rows(dat_mr[!(dat_mr$tag %in% recaps), ], dat_recaps)
 saveRDS(dat_18, ".\\data\\dat_18.rds")
@@ -254,4 +275,6 @@ CH_18 <-
                    by = "tag") # %>%
 #  dplyr::left_join(LH, by = "tag")
 
+
 saveRDS(CH_18, ".\\data\\CH_18.rds")
+
